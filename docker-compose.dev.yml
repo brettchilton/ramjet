@@ -1,0 +1,28 @@
+# Docker Compose override for local development
+# This skips Kratos since we use Simple Auth locally
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+version: '3.8'
+
+services:
+  # Stop Kratos services in development
+  kratos:
+    profiles:
+      - production
+  
+  kratos-migrate:
+    profiles:
+      - production
+  
+  # Ensure backend doesn't depend on Kratos in dev mode
+  backend:
+    depends_on:
+      - db
+    environment:
+      VITE_USE_SIMPLE_AUTH: "true"
+  
+  # Ensure frontend uses simple auth
+  frontend:
+    environment:
+      VITE_USE_SIMPLE_AUTH: "true"
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8006}
