@@ -49,7 +49,7 @@ const { user, isAuthenticated, loading, logout } = useUnifiedAuth();
 
 ```bash
 # Register new user
-POST /auth/simple/register
+POST /auth/register
 Body: {
   "email": "user@example.com",
   "password": "secure-password",
@@ -58,9 +58,20 @@ Body: {
   "mobile": "0400000000",  # optional
   "role": "inspector"      # default: inspector
 }
+Response: {
+  "access_token": "eyJ...",
+  "token_type": "bearer",
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "role": "inspector"
+  }
+}
 
 # Login
-POST /auth/simple/login
+POST /auth/login
 Body: {
   "email": "user@example.com",
   "password": "secure-password"
@@ -72,14 +83,23 @@ Response: {
 }
 
 # Get current user
-GET /auth/simple/me
+GET /auth/me
 Headers: {
   "Authorization": "Bearer eyJ..."
 }
+Response: {
+  "id": "uuid",
+  "email": "user@example.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "mobile": "0400000000",
+  "role": "inspector",
+  "is_active": true
+}
 
-# Logout (client-side)
-POST /auth/simple/logout
-# Client should remove token from localStorage
+# Logout (client-side only)
+POST /auth/logout
+# Simply removes token from localStorage
 ```
 
 ### Frontend Implementation
@@ -91,10 +111,10 @@ const { login } = useAuth();
 await login(email, password);
 
 // The context handles:
-// - API call to /auth/simple/login
+// - API call to /auth/login
 // - Token storage in localStorage
 // - User state management
-// - Automatic token inclusion in API requests
+// - Automatic token inclusion in API requests via apiClient
 ```
 
 ## Production Authentication (Ory Kratos)

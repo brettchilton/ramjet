@@ -28,23 +28,29 @@ Ory Kratos complements the existing Ory Hydra OAuth2 setup by providing:
 
 ### 1. Database Setup
 
-Create the Kratos database:
+Create the Kratos database (only needed for production mode):
 ```bash
-docker exec app_postgres psql -U postgres -d app_database -c "CREATE DATABASE kratos;"
+docker-compose exec db psql -U postgres -c "CREATE DATABASE kratos;"
 ```
 
 ### 2. Run Database Migrations
 
-Apply the new kratos_identity_id column to the users table:
+The `users` table already includes `kratos_identity_id` column. Run migrations if needed:
 ```bash
 docker-compose exec backend alembic upgrade head
 ```
 
 ### 3. Start Services
 
-Start all services including Kratos:
+**Development mode (Simple Auth - no Kratos):**
 ```bash
-docker-compose up -d
+./start-dev.sh
+```
+
+**Production mode (with Kratos):**
+```bash
+./start-prod.sh
+# OR: docker-compose --profile production up -d
 ```
 
 Kratos will be available on:

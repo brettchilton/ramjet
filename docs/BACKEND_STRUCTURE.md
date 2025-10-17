@@ -38,9 +38,10 @@ The entry point of the FastAPI application. Handles:
 
 ### `app/api/`
 Contains all API endpoint definitions organized by resource:
-- `auth.py` - Authentication endpoints (login, register, password reset)
-- `upload.py` - File upload and processing endpoints
-- Future: Add your own API endpoints here
+- `auth_simple.py` - Simple JWT authentication (development)
+- `auth_kratos.py` - Kratos integration endpoints (production)
+- `auth_simplified.py` - Simplified auth wrapper endpoints
+- Future: Add your own API endpoints here (upload, buildings, etc.)
 
 ### `app/core/`
 Core application components:

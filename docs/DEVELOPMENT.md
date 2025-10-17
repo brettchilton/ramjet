@@ -15,42 +15,59 @@ This guide covers the development workflow for the application.
 ### 1. Clone and Setup
 ```bash
 git clone <repository-url>
-cd app
+cd micro_two
 
 # Copy environment template
 cp .env.example .env
 
 # Edit .env with your settings
-# Minimal required: DATABASE_URL, JWT_SECRET_KEY
+# Required: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, SECRET_KEY
 ```
 
 ### 2. Start Docker Services
 ```bash
-# Start all services
-docker-compose up -d
+# Development mode (Simple Auth - no Kratos) - RECOMMENDED
+./start-dev.sh
+# OR manually: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# Production mode (with Kratos)
+./start-prod.sh
+# OR manually: docker-compose --profile production up -d
 
 # Check service health
 docker-compose ps
 
 # View logs
-docker-compose logs -f
+docker-compose logs -f backend
+docker-compose logs -f frontend
 ```
 
-### 3. Initialize Database
+### 3. Initialize Database (First Time Only)
 ```bash
+# Enable UUID extension
+docker-compose exec db psql -U postgres -d annie_defect -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+
+# Create migrations directory
+docker-compose exec backend mkdir -p /app/migrations/versions
+
+# Generate initial migration
+docker-compose exec backend alembic revision --autogenerate -m "Initial migration"
+
 # Run migrations
 docker-compose exec backend alembic upgrade head
 
-# Create Kratos database (if using Kratos)
-docker exec app_postgres psql -U postgres -c "CREATE DATABASE kratos;"
-docker-compose exec kratos kratos migrate sql -e --yes
+# Create Kratos database (ONLY if using production mode with Kratos)
+docker-compose exec db psql -U postgres -c "CREATE DATABASE kratos;"
+docker-compose restart kratos-migrate
+docker-compose restart kratos
 ```
 
 ### 4. Access Application
 - Frontend: http://localhost:5179
 - API Docs: http://localhost:8006/docs
 - Database UI: http://localhost:8085 (Adminer)
-- Email UI: http://localhost:8086 (Mailslurper)
+- Simple Auth Register: http://localhost:5179/simple-register
+- Simple Auth Login: http://localhost:5179/simple-login
 
 ## Development Workflows
 

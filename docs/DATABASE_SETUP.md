@@ -9,17 +9,33 @@ This guide will help you set up the database for your application.
    docker-compose up -d db
    ```
 
-2. **Run database migrations:**
+2. **Enable PostgreSQL UUID extension (required for user IDs):**
+   ```bash
+   docker-compose exec db psql -U postgres -d annie_defect -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+   ```
+
+3. **Create migrations directory structure (first time only):**
+   ```bash
+   docker-compose exec backend mkdir -p /app/migrations/versions
+   ```
+
+4. **Generate initial migration (first time only):**
+   ```bash
+   docker-compose exec backend alembic revision --autogenerate -m "Initial migration with users table"
+   ```
+
+5. **Run database migrations:**
    ```bash
    docker-compose exec backend alembic upgrade head
    ```
 
-3. **Start all services:**
+6. **Start all services:**
    ```bash
-   docker-compose up -d
+   ./start-dev.sh
+   # OR: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
    ```
 
-4. **Test the connection:**
+7. **Test the connection:**
    - Basic test: http://localhost:8006/
    - Database test: http://localhost:8006/db_test
    - ORM test: http://localhost:8006/orm_test
@@ -37,7 +53,8 @@ CREATE TABLE users (
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     mobile VARCHAR(20),
-    hydra_subject VARCHAR(255) UNIQUE,
+    password_hash VARCHAR(255),
+    kratos_identity_id VARCHAR(255) UNIQUE,
     role VARCHAR(50) DEFAULT 'inspector',
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
@@ -46,28 +63,30 @@ CREATE TABLE users (
 
 -- Indexes
 CREATE INDEX idx_user_email ON users(email);
-CREATE INDEX idx_user_hydra_subject ON users(hydra_subject);
+CREATE INDEX idx_user_kratos_identity ON users(kratos_identity_id);
 CREATE INDEX idx_user_active ON users(is_active);
 ```
 
 ### Key Points:
-- **No password storage in users table** - Authentication is handled by auth system
-- **kratos_identity_id** - Links users to Kratos identity (when using Kratos)
-- **Simplified structure** - Removed all tenant-related tables
-- **UUID primary keys** - Using PostgreSQL's uuid-ossp extension
+- **Dual authentication support**:
+  - Simple Auth: Uses `password_hash` field (bcrypt)
+  - Kratos Auth: Uses `kratos_identity_id` to link to Kratos identity
+- **Simplified structure** - Single users table, no complex tenant relationships
+- **UUID primary keys** - Using PostgreSQL's `uuid-ossp` extension (must be enabled)
+- **Password security** - Bcrypt hashing with salt rounds when using Simple Auth
 
 ## Database Access
 
 - **Adminer (Web UI):** http://localhost:8085
   - Server: `db`
-  - Username: `postgres` (from .env)
-  - Password: (from .env)
-  - Database: `app_database`
+  - Username: `postgres` (from .env: POSTGRES_USER)
+  - Password: (from .env: POSTGRES_PASSWORD)
+  - Database: `annie_defect`
 
 - **Direct PostgreSQL connection:**
   - Host: `localhost`
   - Port: `5435`
-  - Database: `app_database`
+  - Database: `annie_defect`
   - Username: `postgres`
   - Password: (from .env)
 

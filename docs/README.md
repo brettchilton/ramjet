@@ -7,20 +7,29 @@ A modern web application template with authentication, AI agent integration, and
 ```bash
 # Clone repository
 git clone <repository-url>
-cd app
+cd micro_two
 
 # Copy and configure environment variables
 cp .env.example .env
-# Edit .env with your settings
+# Edit .env with your settings (database credentials are required)
 
-# Start all services
-docker-compose up -d
+# Start development environment (Simple Auth - no Kratos)
+./start-dev.sh
+
+# OR manually:
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# Enable PostgreSQL UUID extension (first time only)
+docker-compose exec db psql -U postgres -d annie_defect -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+
+# Run database migrations (first time only)
+docker-compose exec backend alembic upgrade head
 
 # Access the application
 open http://localhost:5179
 
-# Create an account
-open http://localhost:5179/auth/registration
+# Create an account (Simple Auth for development)
+open http://localhost:5179/simple-register
 ```
 
 ## 📋 Features
@@ -51,7 +60,7 @@ open http://localhost:5179/auth/registration
 
 | Server | Port | Description |
 |--------|------|-------------|
-| Excel MCP | 9105 | Excel file manipulation and analysis |
+| Excel MCP | 9100 | Excel file manipulation and analysis |
 
 ### Tech Stack
 
@@ -66,14 +75,13 @@ open http://localhost:5179/auth/registration
 - React 18 with TypeScript
 - Vite for fast development
 - TanStack Router for routing
-- Material-UI components
-- Axios for API calls
+- shadcn/ui + Tailwind CSS for components
+- Native fetch via apiClient
 
 **Infrastructure**
 - Docker & Docker Compose
-- PostgreSQL (dual database setup)
-- Redis for caching
-- Digital Ocean Spaces for file storage
+- PostgreSQL (single database with optional Kratos DB)
+- Digital Ocean Spaces for file storage (optional)
 
 ## 🔧 Configuration
 
@@ -170,31 +178,33 @@ Add to your Claude Desktop config file:
 ### Starting Services
 
 ```bash
-# Start core application services
-docker-compose up -d backend frontend db redis hydra
+# Start development environment (Simple Auth - recommended)
+./start-dev.sh
+# OR manually: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
-# Start MCP servers
-./scripts/start-servers.sh
-
-# Start everything
-docker-compose up -d
+# Start production environment (with Kratos)
+./start-prod.sh
+# OR manually: docker-compose --profile production up -d
 
 # View logs
 docker-compose logs -f backend
-docker-compose logs -f eezy_peezy_excel_mcp
+docker-compose logs -f frontend
 
 # Restart specific service
-docker-compose restart eezy_peezy_backend
+docker-compose restart backend
 ```
 
 ### Database Migrations
 
 ```bash
 # Run migrations
-docker exec backend alembic upgrade head
+docker-compose exec backend alembic upgrade head
 
-# Create new migration
-docker exec backend alembic revision -m "description"
+# Create new migration (auto-generate from models)
+docker-compose exec backend alembic revision --autogenerate -m "description"
+
+# Create blank migration
+docker-compose exec backend alembic revision -m "description"
 ```
 
 ### Authentication Setup
@@ -214,14 +224,14 @@ docker exec backend alembic revision -m "description"
 ## 📁 Project Structure
 
 ```
-eezy-peezy/
+micro_two/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                # FastAPI application
 │   │   ├── api/
 │   │   │   ├── auth_simple.py     # Simple JWT auth
 │   │   │   ├── auth_kratos.py     # Kratos integration
-│   │   │   └── buildings.py       # Building/defect APIs
+│   │   │   └── auth_simplified.py # Simplified auth wrapper
 │   │   ├── core/
 │   │   │   ├── auth.py           # Authentication logic
 │   │   │   ├── models.py         # SQLAlchemy models
@@ -239,9 +249,15 @@ eezy-peezy/
 │   │       └── apiClient.ts           # API client
 │   └── package.json
 ├── kratos/                      # Kratos configuration
-├── docker-compose.yml           # Service orchestration
-├── .env                        # Environment variables
-└── docs/                       # Documentation
+├── mcp-servers/                 # MCP server implementations
+│   └── excel/                   # Excel processing MCP
+├── docker-compose.yml           # Main service orchestration
+├── docker-compose.dev.yml       # Development overrides (skips Kratos)
+├── start-dev.sh                 # Quick start for development
+├── start-prod.sh                # Quick start for production
+├── .env                         # Environment variables
+├── .gitignore                   # Git ignore patterns
+└── docs/                        # Documentation
 ```
 
 ## 📊 Data Flow
