@@ -1,0 +1,31 @@
+# backend/Dockerfile
+
+# Use an official Python runtime as the base image.
+# Using python:3.13-slim-bookworm for a smaller image size and specific Debian base.
+FROM python:3.13-slim-bookworm
+
+# Set the working directory inside the container.
+WORKDIR /app
+
+# Install curl for healthchecks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+# Copy the requirements.txt file and install dependencies.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of your application code.
+COPY . .
+
+# Expose port 8000 for the FastAPI application.
+EXPOSE 8000
+
+# Healthcheck for production container (ECS, Docker Swarm, etc.)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=5 \
+  CMD curl -f http://localhost:8000/ || exit 1
+
+# Environment variables for database connection will be provided at runtime
+# via Docker Compose (loaded from the root .env file).
+
+# Command to run the FastAPI application with Uvicorn.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

@@ -1,0 +1,66 @@
+{
+  "$id": "https://schemas.annie-defect.com/v1/identity.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Person",
+  "type": "object",
+  "properties": {
+    "traits": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "title": "E-Mail",
+          "ory.sh/kratos": {
+            "credentials": {
+              "password": {
+                "identifier": true
+              },
+              "webauthn": {
+                "identifier": true
+              },
+              "totp": {
+                "account_name": true
+              }
+            },
+            "recovery": {
+              "via": "email"
+            },
+            "verification": {
+              "via": "email"
+            }
+          }
+        },
+        "first_name": {
+          "type": "string",
+          "title": "First Name",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "last_name": {
+          "type": "string",
+          "title": "Last Name",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "mobile": {
+          "type": "string",
+          "title": "Mobile Number",
+          "maxLength": 20
+        },
+        "role": {
+          "type": "string",
+          "title": "Role",
+          "enum": ["inspector", "admin", "viewer"],
+          "default": "inspector"
+        }
+      },
+      "required": [
+        "email",
+        "first_name",
+        "last_name"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

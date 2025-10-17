@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body>
+    <h1>Test Page</h1>
+    <p>If you can see this, the server is working.</p>
+    <script>
+        console.log('Test page loaded');
+        fetch('http://localhost:5179/').then(r => r.text()).then(t => {
+            console.log('Homepage response:', t.substring(0, 200));
+        });
+    </script>
+</body>
+</html>

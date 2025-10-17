@@ -1,0 +1,165 @@
+
+
+services:
+  db:
+    image: postgres:latest
+    container_name: eezy_peezy_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - '5435:5432' # Host port 5435, Container port 5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  adminer:
+    image: adminer:latest
+    container_name: eezy_peezy_adminer
+    restart: always
+    ports:
+      - '8085:8080' # Host port 8080, Container port 8080. Change if busy.
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  backend:
+    build: ./backend
+    container_name: eezy_peezy_backend
+    restart: always
+    ports:
+      - '8006:8000' # Host port 8000, Container port 8000. Change if busy.
+    environment:
+      DB_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DEBUG: ${DEBUG}
+      LOG_LEVEL: ${LOG_LEVEL}
+      DO_SPACES_BUCKET: ${DO_SPACES_BUCKET}
+      DO_SPACES_KEY: ${DO_SPACES_KEY}
+      DO_SPACES_SECRET: ${DO_SPACES_SECRET}
+      DO_SPACES_REGION: ${DO_SPACES_REGION}
+      DO_SPACES_ENDPOINT: ${DO_SPACES_ENDPOINT}
+      DO_SPACES_EXPIRATION_SECONDS: ${DO_SPACES_EXPIRATION_SECONDS}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      MAILGUN_API_KEY: ${MAILGUN_API_KEY}
+      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN}
+      MAIL_FROM_EMAIL: ${MAIL_FROM_EMAIL}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME}
+      FRONTEND_URL: ${FRONTEND_URL}
+      KRATOS_PUBLIC_URL: http://kratos:4433
+      KRATOS_ADMIN_URL: http://kratos:4434
+      KRATOS_WEBHOOK_SECRET: ${KRATOS_WEBHOOK_SECRET:-your-webhook-secret}
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app # Mounts your local 'backend' folder to '/app' in the container for live code changes
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5s
+    networks:
+      - app-network
+
+  frontend: # New service for your React frontend
+    build: ./frontend # Instructs Docker to build from the Dockerfile in the ./frontend directory
+    container_name: eezy_peezy_frontend
+    restart: always
+    ports:
+      - '5179:5179' # Maps host port 5179 to container port 5179
+    environment:
+      # Crucial: This tells your React app where to find the backend API.
+      VITE_API_URL: ${VITE_API_URL}
+    depends_on:
+      - backend # Ensures the backend is running before the frontend tries to connect
+    volumes:
+      - ./frontend:/app # Mounts your local 'frontend' folder to '/app' for live code changes
+      - /app/node_modules # Prevents host's node_modules from overwriting container's
+    networks:
+      - app-network  
+  # Redis and Hydra removed - using Kratos for all authentication
+  
+  kratos:
+    image: oryd/kratos:v1.0.0
+    container_name: eezy_peezy_kratos
+    restart: always
+    ports:
+      - "4433:4433" # Public port
+      - "4434:4434" # Admin port
+    environment:
+      - DSN=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+      - SECRETS_COOKIE=${KRATOS_COOKIE_SECRET}
+      - SECRETS_CIPHER=${KRATOS_CIPHER_SECRET}
+      - LOG_LEVEL=debug
+      - LOG_LEAK_SENSITIVE_VALUES=true
+      - SERVE_PUBLIC_BASE_URL=http://localhost:4433/
+      - SERVE_ADMIN_BASE_URL=http://kratos:4434/
+      - SELFSERVICE_DEFAULT_BROWSER_RETURN_URL=${FRONTEND_URL}/
+      - SELFSERVICE_ALLOWED_RETURN_URLS=${FRONTEND_URL}
+      - SELFSERVICE_FLOWS_ERROR_UI_URL=${FRONTEND_URL}/auth/error
+      - SELFSERVICE_FLOWS_SETTINGS_UI_URL=${FRONTEND_URL}/settings
+      - SELFSERVICE_FLOWS_RECOVERY_UI_URL=${FRONTEND_URL}/auth/recovery
+      - SELFSERVICE_FLOWS_VERIFICATION_UI_URL=${FRONTEND_URL}/auth/verification
+      - SELFSERVICE_FLOWS_LOGOUT_AFTER_DEFAULT_BROWSER_RETURN_URL=${FRONTEND_URL}/
+      - SELFSERVICE_FLOWS_LOGIN_UI_URL=${FRONTEND_URL}/auth/login
+      - SELFSERVICE_FLOWS_REGISTRATION_UI_URL=${FRONTEND_URL}/auth/registration
+      - KRATOS_WEBHOOK_SECRET=${KRATOS_WEBHOOK_SECRET}
+    command: serve all --dev --config /etc/config/kratos/kratos.yml
+    volumes:
+      - ./kratos:/etc/config/kratos
+    depends_on:
+      - db
+      - kratos-migrate
+    networks:
+      - app-network
+  
+  kratos-migrate:
+    image: oryd/kratos:v1.0.0
+    container_name: eezy_peezy_kratos_migrate
+    environment:
+      - DSN=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+    volumes:
+      - ./kratos:/etc/config/kratos
+    command: -c /etc/config/kratos/kratos.yml migrate sql -e --yes
+    depends_on:
+      - db
+    networks:
+      - app-network
+    restart: on-failure
+
+  # ====================
+  # MCP Server Services
+  # ====================
+
+  excel-mcp:
+    build:
+      context: ./mcp-servers/excel
+      dockerfile: Dockerfile
+    container_name: eezy_peezy_excel_mcp
+    environment:
+      - MODE=${MODE:-stdio}
+    ports:
+      - "${EXCEL_MCP_PORT:-9105}:9100"
+    volumes:
+      - ./mcp-servers/excel/excel_files:/app/excel_files
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+volumes:
+  pgdata:
+
+networks:
+  app-network:
+    driver: bridge
+  mcp-network:
+    driver: bridge

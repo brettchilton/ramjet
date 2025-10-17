@@ -1,0 +1,839 @@
+"""
+Upload router for handling zip file uploads and processing
+"""
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
+from typing import Optional
+import uuid
+import zipfile
+import io
+import os
+import tempfile
+import shutil
+from datetime import datetime
+import boto3
+from botocore.exceptions import ClientError
+import pandas as pd
+from pathlib import Path
+from dotenv import load_dotenv
+import logging
+
+# Load environment variables
+load_dotenv()
+
+# {{ edit_1: configure Python logging and a DEBUG flag from .env }}
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+
+from app.core.database import get_db
+from app.core.models import User
+
+# Import authentication dependencies
+from app.core.auth import get_current_user
+from typing import Dict, Any
+
+router = APIRouter(
+    prefix="/projects",
+    tags=["projects"],
+    responses={404: {"description": "Not found"}},
+)
+
+# Note: Tenant and User IDs now come from authenticated user
+
+# Digital Ocean Spaces configuration
+DO_SPACES_ENDPOINT = os.getenv("DO_SPACES_ENDPOINT")
+DO_SPACES_BUCKET = os.getenv("DO_SPACES_BUCKET")
+DO_SPACES_ACCESS_KEY = os.getenv("DO_SPACES_KEY")
+DO_SPACES_SECRET_KEY = os.getenv("DO_SPACES_SECRET")
+DO_SPACES_REGION = os.getenv("DO_SPACES_REGION", "syd1")
+
+# Initialize S3 client for DO Spaces
+s3_client = boto3.client(
+    's3',
+    endpoint_url=DO_SPACES_ENDPOINT,
+    aws_access_key_id=DO_SPACES_ACCESS_KEY,
+    aws_secret_access_key=DO_SPACES_SECRET_KEY,
+    region_name=DO_SPACES_REGION
+)
+
+class UploadResponse:
+    """Response model for upload endpoint"""
+    def __init__(self, project_id: str, status: str, message: str):
+        self.project_id = project_id
+        self.status = status
+        self.message = message
+
+@router.post("/upload", 
+    summary="Upload and process defect data",
+    description="Upload a ZIP file containing Fulcrum Excel data and images, along with scope of work text",
+    response_description="Project details with upload status",
+    responses={
+        200: {
+            "description": "Successful upload and processing",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "project_id": "550e8400-e29b-41d4-a716-446655440000",
+                        "status": "processing",
+                        "message": "Upload received and processing started"
+                    }
+                }
+            }
+        },
+        400: {"description": "Invalid file format or validation error"},
+        500: {"description": "Server error during processing"}
+    }
+)
+async def upload_project(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(..., description="ZIP file containing Excel data and images"),
+    scope_text: str = Form(..., description="Scope of work description"),
+    db: Session = Depends(get_db),
+    current_user_data: Dict[str, Any] = Depends(require_tenant)
+):
+    """
+    Upload and process a project ZIP file.
+    
+    The ZIP file should contain:
+    - One Excel file (.xlsx) with Fulcrum data
+    - One images.zip file containing defect photos
+    
+    Processing includes:
+    1. Validating ZIP structure
+    2. Parsing Excel data
+    3. Importing data to database
+    4. Uploading images to Digital Ocean Spaces
+    """
+    
+    # {{ edit_2: read file bytes once }}
+    file_content = await file.read()
+    logger.debug("Received upload: filename=%s (%d bytes)", file.filename, len(file_content))
+
+    # {{ edit_3: pre-validate ZIP contents before creating Project record }}
+    try:
+        with zipfile.ZipFile(io.BytesIO(file_content)) as zf:
+            names = zf.namelist()
+            logger.debug("ZIP entries: %s", names)
+            if not any(n.endswith(".xlsx") for n in names):
+                logger.error("ZIP missing Excel file")
+                raise HTTPException(status_code=400, detail="ZIP must contain an Excel (.xlsx) file")
+            if not any("images.zip" in n for n in names):
+                logger.error("ZIP missing images.zip")
+                raise HTTPException(status_code=400, detail="ZIP must contain an images.zip file")
+    except zipfile.BadZipFile:
+        logger.exception("Invalid ZIP archive")
+        raise HTTPException(status_code=400, detail="Invalid ZIP archive")
+    
+    # Get tenant and user IDs from authenticated user
+    tenant_id = current_user_data["user"]["tenant_id"]
+    user_id = current_user_data["user"]["id"]
+    
+    # Create project record
+    project = Project(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        name=file.filename.replace('.zip', ''),
+        display_name=file.filename.replace('.zip', ''),
+        status="uploaded",
+        zip_filename=file.filename,
+        upload_date=datetime.utcnow()
+    )
+    
+    try:
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+        
+        # Create scope of work record
+        scope = ScopeOfWork(
+            project_id=project.id,
+            scope_text=scope_text
+        )
+        db.add(scope)
+        db.commit()
+        
+        # {{ edit_4: use DEBUG flag to decide sync vs background }}
+        if DEBUG:
+            logger.debug("DEBUG mode: processing upload synchronously for project %s", project.id)
+            try:
+                await process_upload(
+                    project_id=str(project.id),
+                    tenant_id=str(tenant_id),
+                    file_content=file_content,
+                    db=db
+                )
+            except Exception as e:
+                logger.exception("Synchronous processing failed for project %s", project.id)
+                # surface it to the client
+                raise HTTPException(status_code=500, detail=str(e))
+        else:
+            logger.info("Scheduling background processing for project %s", project.id)
+            background_tasks.add_task(
+                process_upload,
+                project_id=str(project.id),
+                tenant_id=str(tenant_id),
+                file_content=file_content,
+                db=db
+            )
+        
+        return JSONResponse(
+            content={
+                "project_id": str(project.id),
+                "status": "processing",
+                "message": "Upload received and processing started"
+            }
+        )
+        
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error creating project record")
+        raise HTTPException(status_code=500, detail=f"Error creating project: {str(e)}")
+
+
+async def process_upload(project_id: str, tenant_id: str, file_content: bytes, db: Session):
+    """
+    Process the uploaded ZIP file in the background
+    """
+    # {{ edit_3: add entry/exit debug logs }}
+    logger.debug("Starting process_upload for project %s", project_id)
+    temp_dir = None
+    
+    try:
+        # Update project status
+        project = db.query(Project).filter(Project.id == project_id).first()
+        project.status = "processing"
+        project.processing_started_at = datetime.utcnow()
+        db.commit()
+        
+        # Create temporary directory for extraction
+        temp_dir = tempfile.mkdtemp()
+        
+        # Extract main ZIP
+        with zipfile.ZipFile(io.BytesIO(file_content)) as main_zip:
+            main_zip.extractall(temp_dir)
+        
+        # Find Excel and images.zip (search recursively)
+        excel_file = None
+        images_zip = None
+        
+        for root, dirs, files in os.walk(temp_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                if file.endswith('.xlsx') and not file.startswith('._'):  # Skip macOS metadata files
+                    excel_file = file_path
+                elif file == 'images.zip' or file.endswith('images.zip'):
+                    images_zip = file_path
+        
+        if not excel_file:
+            raise ValueError("No Excel file found in ZIP")
+        if not images_zip:
+            raise ValueError("No images.zip found in ZIP")
+        
+        # Parse Excel and import data
+        photo_to_defect_map = await import_excel_data(project_id, excel_file, db)
+        
+        # Process images
+        await process_images(project_id, tenant_id, images_zip, photo_to_defect_map, db)
+        
+        # Update project status to completed
+        project.status = "completed"
+        project.processing_completed_at = datetime.utcnow()
+        db.commit()
+        
+    except Exception as e:
+        # Update project status to error
+        project = db.query(Project).filter(Project.id == project_id).first()
+        project.status = "error"
+        db.commit()
+        # {{ edit_4: replace print with exception logging }}
+        logger.exception("Error processing upload for project %s", project_id)
+        
+    finally:
+        # Clean up temp directory
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        # {{ edit_5: add exit debug log }}
+        logger.debug("Finished process_upload for project %s (status=%s)", project_id, project.status)
+
+
+async def import_excel_data(project_id: str, excel_path: str, db: Session):
+    """
+    Import data from Excel file to database
+    """
+    try:
+        # Clear existing data for this project to allow re-uploads
+        logger.info("Clearing existing data for project %s", project_id)
+        
+        # First, get all the Fulcrum IDs we're about to import so we can clear them
+        excel_data_preview = pd.ExcelFile(excel_path)
+        sheet_names_preview = excel_data_preview.sheet_names
+        
+        # Identify sheets
+        building_sheet_preview = None
+        room_sheet_preview = None
+        component_sheet_preview = None
+        defect_sheet_preview = None
+        
+        for sheet in sheet_names_preview:
+            sheet_lower = sheet.lower()
+            if sheet_lower.endswith('_room_detail') or sheet_lower.endswith('_rooms'):
+                room_sheet_preview = sheet
+            elif sheet_lower.endswith('_condition') or sheet_lower.endswith('_components'):
+                component_sheet_preview = sheet
+            elif sheet_lower.endswith('_defect') or sheet_lower.endswith('_defects'):
+                defect_sheet_preview = sheet
+            elif not any(sheet_lower.endswith(x) for x in ['_room_detail', '_condition', '_defect', '_components', '_defects', '_rooms']):
+                if not building_sheet_preview:
+                    building_sheet_preview = sheet
+        
+        # Read the IDs we're about to import
+        if building_sheet_preview:
+            buildings_preview = pd.read_excel(excel_path, sheet_name=building_sheet_preview)
+            building_ids_to_clear = buildings_preview['_record_id'].dropna().tolist()
+            
+            if building_ids_to_clear:
+                logger.info("Found %d building IDs to clear from Excel file.", len(building_ids_to_clear))
+
+                # 1. Find all rooms in the buildings to be cleared
+                room_ids_to_clear = [r[0] for r in db.query(Room.id).filter(Room.building_id.in_(building_ids_to_clear)).all()]
+                logger.info("Found %d rooms to clear.", len(room_ids_to_clear))
+
+                # 2. Find all components linked to either the rooms or the buildings
+                from sqlalchemy import or_
+                component_ids_to_clear = [c[0] for c in db.query(Component.id).filter(
+                    or_(
+                        Component.building_id.in_(building_ids_to_clear),
+                        Component.room_id.in_(room_ids_to_clear)
+                    )
+                ).all()]
+                logger.info("Found %d components to clear.", len(component_ids_to_clear))
+
+                if component_ids_to_clear:
+                    # 3. Find all defects linked to these components
+                    defect_ids_to_clear = [d[0] for d in db.query(Defect.id).filter(Defect.component_id.in_(component_ids_to_clear)).all()]
+                    logger.info("Found %d defects to clear.", len(defect_ids_to_clear))
+                    
+                    if defect_ids_to_clear:
+                        # 4. Delete DefectImages
+                        image_delete_count = db.query(DefectImage).filter(DefectImage.defect_id.in_(defect_ids_to_clear)).delete(synchronize_session=False)
+                        logger.info("Deleted %d defect images.", image_delete_count)
+                        
+                        # 5. Delete Defects
+                        defect_delete_count = db.query(Defect).filter(Defect.id.in_(defect_ids_to_clear)).delete(synchronize_session=False)
+                        logger.info("Deleted %d defects.", defect_delete_count)
+
+                    # 6. Delete Components
+                    component_delete_count = db.query(Component).filter(Component.id.in_(component_ids_to_clear)).delete(synchronize_session=False)
+                    logger.info("Deleted %d components.", component_delete_count)
+
+                # 7. Delete Rooms
+                if room_ids_to_clear:
+                    room_delete_count = db.query(Room).filter(Room.id.in_(room_ids_to_clear)).delete(synchronize_session=False)
+                    logger.info("Deleted %d rooms.", room_delete_count)
+                
+                # 8. Delete Buildings
+                building_delete_count = db.query(Building).filter(Building.id.in_(building_ids_to_clear)).delete(synchronize_session=False)
+                logger.info("Deleted %d buildings.", building_delete_count)
+                
+                logger.info("Finished clearing data based on Excel file.")
+        
+        # Also clear any data specifically for this project
+        # COMMENTED OUT: This was causing duplicate key violations when re-uploading same Fulcrum data
+        # db.query(Building).filter(Building.project_id == project_id).delete(synchronize_session=False)
+        
+        db.commit()
+        logger.info("Cleared existing data for project %s", project_id)
+        
+        # Read Excel file
+        excel_data = pd.ExcelFile(excel_path)
+        sheet_names = excel_data.sheet_names
+        
+        logger.info("Excel sheets found: %s", sheet_names)
+        
+        # Identify sheets by suffix - handle multiple formats
+        building_sheet = None
+        room_sheet = None
+        component_sheet = None
+        defect_sheet = None
+        
+        for sheet in sheet_names:
+            sheet_lower = sheet.lower()
+            
+            # Check for most specific patterns first
+            if sheet_lower.endswith('_room_detail') or sheet_lower.endswith('_rooms'):
+                room_sheet = sheet
+                logger.debug("Identified room sheet: %s", sheet)
+            elif sheet_lower.endswith('_condition') or sheet_lower.endswith('_components'):
+                component_sheet = sheet
+                logger.debug("Identified component sheet: %s", sheet)
+            elif sheet_lower.endswith('_defect') or sheet_lower.endswith('_defects'):
+                defect_sheet = sheet
+                logger.debug("Identified defect sheet: %s", sheet)
+            else:
+                # If no specific suffix, it's likely the building sheet
+                # Make sure it doesn't have other suffixes
+                if not any(sheet_lower.endswith(x) for x in ['_room_detail', '_condition', '_defect', '_components', '_defects', '_rooms']):
+                    if not building_sheet:
+                        building_sheet = sheet
+                        logger.debug("Identified building sheet: %s", sheet)
+        
+        logger.info("Sheet mapping - Building: %s, Room: %s, Component: %s, Defect: %s", 
+                    building_sheet, room_sheet, component_sheet, defect_sheet)
+        
+        if not all([building_sheet, component_sheet, defect_sheet]):
+            missing = []
+            if not building_sheet:
+                missing.append("building")
+            if not component_sheet:
+                missing.append("component/condition")
+            if not defect_sheet:
+                missing.append("defect")
+            raise ValueError(f"Required Excel sheets not found. Missing: {', '.join(missing)}. Found sheets: {sheet_names}")
+        
+        # Extract project name from sheet name
+        project_name = building_sheet.split('_')[0] if '_' in building_sheet else building_sheet
+        
+        # Update project name
+        project = db.query(Project).filter(Project.id == project_id).first()
+        project.name = project_name
+        project.display_name = project_name
+        db.commit()
+        
+        # Read dataframes
+        buildings_df = pd.read_excel(excel_path, sheet_name=building_sheet)
+        components_df = pd.read_excel(excel_path, sheet_name=component_sheet)
+        defects_df = pd.read_excel(excel_path, sheet_name=defect_sheet)
+        rooms_df = pd.read_excel(excel_path, sheet_name=room_sheet) if room_sheet else None
+        
+        # Import buildings - use Fulcrum UUID as primary key
+        for _, row in buildings_df.iterrows():
+            # Handle NaN/NaT values properly
+            building_id_val = row.get('building_id')
+            if pd.isna(building_id_val):
+                building_id_val = ''
+                
+            building_type_val = row.get('building_type')
+            if pd.isna(building_type_val):
+                building_type_val = ''
+                
+            date_val = row.get('date_of_assessment')
+            if pd.notna(date_val) and date_val != 'NaT':
+                try:
+                    date_val = pd.to_datetime(date_val)
+                    # Check if it's NaT after conversion
+                    if pd.isna(date_val):
+                        date_val = None
+                except:
+                    date_val = None
+            else:
+                date_val = None
+            
+            # Convert string UUID to Python UUID object
+            building_uuid = uuid.UUID(str(row.get('_record_id')))
+            
+            building = Building(
+                id=building_uuid,  # Use UUID object
+                project_id=project_id,
+                building_id=building_id_val,
+                building_name=row.get('building_name', ''),
+                building_address=row.get('building_address', ''),
+                building_type=building_type_val,
+                date_of_assessment=date_val
+            )
+            db.add(building)
+        
+        # Import rooms if they exist - use Fulcrum UUID as primary key
+        if rooms_df is not None:
+            # Determine which column has the room ID (handle both formats)
+            room_id_column = '_child_record_id' if '_child_record_id' in rooms_df.columns else '_record_id'
+            logger.info("Using room ID column: %s", room_id_column)
+            
+            for _, row in rooms_df.iterrows():
+                # Handle NaN values for numeric fields
+                length_val = row.get('length_room')
+                width_val = row.get('width_room')
+                height_val = row.get('height_room')
+                area_val = row.get('room_area')
+                
+                # Convert NaN to None for database
+                length_val = None if pd.isna(length_val) else length_val
+                width_val = None if pd.isna(width_val) else width_val
+                height_val = None if pd.isna(height_val) else height_val
+                area_val = None if pd.isna(area_val) else area_val
+                
+                # Convert string UUIDs to Python UUID objects
+                room_uuid = uuid.UUID(str(row.get(room_id_column)))
+                building_uuid = uuid.UUID(str(row.get('_parent_id')))
+                
+                room = Room(
+                    id=room_uuid,  # Use UUID object
+                    building_id=building_uuid,  # Use UUID object
+                    room_name=row.get('room_name', ''),
+                    room_number=row.get('room_number', ''),
+                    level=row.get('level', ''),
+                    length_room=length_val,
+                    width_room=width_val,
+                    height_room=height_val,
+                    room_area=area_val
+                )
+                db.add(room)
+        
+        # Pre-scan defects to identify components with defects
+        # The defect's _parent_id IS the component's _child_record_id
+        components_with_defects = set()
+        for _, row in defects_df.iterrows():
+            # The defect's _parent_id references the component's _child_record_id (component's ID)
+            component_id = row.get('_parent_id')
+            if component_id and pd.notna(component_id):
+                components_with_defects.add(str(component_id))
+        
+        logger.debug("Components with defects (from defects _parent_id): %s", components_with_defects)
+        
+        # Import only components that have defects - use Fulcrum UUID as primary key
+        # Determine which column has the component ID (handle both formats)
+        component_id_column = '_child_record_id' if '_child_record_id' in components_df.columns else '_record_id'
+        logger.info("Using component ID column: %s", component_id_column)
+        
+        imported_components = set()
+        for _, row in components_df.iterrows():
+            component_id = str(row.get(component_id_column))  # Use appropriate ID column
+            logger.debug("Processing component %s, checking if in defects set", component_id)
+            if component_id in components_with_defects:
+                parent_id = row.get('_parent_id')
+                
+                # Determine if parent is room or building by checking if room exists
+                room_id = None
+                building_id = None
+                
+                # Try to find if parent_id exists in rooms table
+                try:
+                    # Check if this is a room parent
+                    if rooms_df is not None:
+                        # Use the same column we determined earlier for room IDs
+                        room_id_column = '_child_record_id' if '_child_record_id' in rooms_df.columns else '_record_id'
+                        room_exists = rooms_df[rooms_df[room_id_column] == parent_id]
+                        if not room_exists.empty:
+                            room_id = parent_id
+                            # Get building_id from the room's parent
+                            building_id = room_exists.iloc[0]['_parent_id']
+                        else:
+                            # Parent is directly a building
+                            building_id = parent_id
+                    else:
+                        # No rooms, so parent must be building
+                        building_id = parent_id
+                except:
+                    # Fallback: assume parent is building
+                    building_id = parent_id
+                
+                # Handle NaN for quantity
+                quantity_val = row.get('quantity')
+                quantity_val = None if pd.isna(quantity_val) else quantity_val
+                
+                # Convert string UUID to Python UUID object
+                component_uuid = uuid.UUID(str(row.get(component_id_column)))
+                # Convert room_id and building_id if they exist
+                room_uuid = uuid.UUID(room_id) if room_id else None
+                building_uuid = uuid.UUID(building_id) if building_id else None
+                
+                component = Component(
+                    id=component_uuid,  # Use UUID object
+                    room_id=room_uuid,
+                    building_id=building_uuid,
+                    component_group=row.get('select_component', ''),
+                    sub_component=row.get('sub_component', ''),
+                    component_material=row.get('component_material', ''),
+                    condition_score=row.get('condition_score', ''),
+                    quantity=quantity_val,
+                    unit_of_measure=row.get('unit_of_measure', '')
+                )
+                db.add(component)
+                imported_components.add(component_id)
+                logger.debug("Added component %s with room_id=%s, building_id=%s", component.id, room_id, building_id)
+        
+        # Validate that all required components were imported
+        logger.debug("Imported components: %s", imported_components)
+        missing_components = components_with_defects - imported_components
+        if missing_components:
+            logger.warning("Missing components that have defects: %s", missing_components)
+        
+        # Import defects and build photo mapping - use Fulcrum UUID as primary key
+        photo_to_defect_map = {}  # Map photo UUID to defect database ID
+        defects_added = 0
+        defects_skipped = 0
+        
+        for _, row in defects_df.iterrows():
+            parent_id = row.get('_parent_id')
+            defect_id = row.get('_child_record_id')
+            
+            # Validate that the component exists before trying to add the defect
+            if str(parent_id) not in imported_components:
+                logger.warning("Skipping defect %s - component %s not found in imported components", defect_id, parent_id)
+                defects_skipped += 1
+                continue
+            
+            logger.debug("Processing defect %s with component_id %s", defect_id, parent_id)
+            
+            # Handle NaN for defect quantity
+            defect_qty = row.get('defect_quantity')
+            defect_qty = None if pd.isna(defect_qty) else defect_qty
+            
+            # Convert string UUIDs to Python UUID objects
+            defect_uuid = uuid.UUID(str(defect_id))
+            component_uuid = uuid.UUID(str(parent_id))
+            
+            defect = Defect(
+                id=defect_uuid,  # Use UUID object
+                component_id=component_uuid,  # Use UUID object
+                defect_quantity=defect_qty,
+                defect_location=row.get('defect_location', ''),
+                # AI fields left as NULL as specified
+                ai_processed=False,
+                status='draft'
+            )
+            db.add(defect)
+            defects_added += 1
+            logger.debug("Added defect %s", defect.id)
+            
+            # Map photo UUIDs to this defect
+            defect_photos = [
+                row.get('defect_photos1'),
+                row.get('defect_photos2'),
+                row.get('defect_photos3')  # In case there's a third photo
+            ]
+            
+            for photo_uuid in defect_photos:
+                if photo_uuid and pd.notna(photo_uuid):  # Check if photo exists
+                    photo_to_defect_map[str(photo_uuid)] = str(defect_id)  # Store as string for mapping
+                    logger.debug("Mapped photo %s to defect %s", photo_uuid, defect_id)
+        
+        db.commit()
+        
+        # Log import summary
+        logger.info("Import summary: %d defects added, %d defects skipped", defects_added, defects_skipped)
+        logger.info("Total components imported: %d", len(imported_components))
+        
+        # Return the photo mapping for use in image processing
+        return photo_to_defect_map
+        
+    except Exception as e:
+        db.rollback()
+        raise Exception(f"Error importing Excel data: {str(e)}")
+
+
+async def process_images(project_id: str, tenant_id: str, images_zip_path: str, photo_to_defect_map: dict, db: Session):
+    """
+    Extract and upload images to Digital Ocean Spaces
+    """
+    logger.debug("Starting process_images for project %s", project_id)
+    logger.debug("Images ZIP path: %s", images_zip_path)
+    
+    temp_images_dir = None
+    
+    try:
+        # Check if images.zip file exists and get its size
+        if not os.path.exists(images_zip_path):
+            logger.error("Images ZIP file not found: %s", images_zip_path)
+            raise Exception(f"Images ZIP file not found: {images_zip_path}")
+        
+        file_size = os.path.getsize(images_zip_path)
+        logger.debug("Images ZIP file size: %d bytes", file_size)
+        
+        # Get defect mapping from previous import
+        defects = db.query(Defect).join(Component).join(Building).filter(
+            Building.project_id == project_id
+        ).all()
+        
+        logger.debug("Found %d defects for project %s", len(defects), project_id)
+        
+        # Photo mapping is passed from import_excel_data
+        # No need to recreate it here
+        logger.debug("Using photo_to_defect_map with %d mappings", len(photo_to_defect_map))
+        
+        # Extract images
+        temp_images_dir = tempfile.mkdtemp()
+        logger.debug("Created temp directory: %s", temp_images_dir)
+        
+        try:
+            with zipfile.ZipFile(images_zip_path) as images_zip:
+                zip_contents = images_zip.namelist()
+                logger.debug("Images ZIP contains %d files: %s", len(zip_contents), zip_contents[:10])  # Show first 10
+                images_zip.extractall(temp_images_dir)
+                logger.debug("Successfully extracted images ZIP to temp directory")
+        except zipfile.BadZipFile as e:
+            logger.error("Invalid images ZIP file: %s", str(e))
+            raise Exception(f"Invalid images ZIP file: {str(e)}")
+        
+        # List what was extracted
+        extracted_files = []
+        for root, dirs, files in os.walk(temp_images_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                file_size = os.path.getsize(file_path)
+                extracted_files.append((file_path, file_size))
+        
+        logger.debug("Extracted %d files:", len(extracted_files))
+        for file_path, file_size in extracted_files:  # Show all files for debugging
+            logger.debug("  %s (%d bytes)", file_path, file_size)
+        
+        # Separate the files by type for analysis
+        image_files = [f for f in extracted_files if f[0].lower().endswith(('.jpg', '.jpeg', '.png')) and not os.path.basename(f[0]).startswith('._')]
+        metadata_files = [f for f in extracted_files if os.path.basename(f[0]).startswith('._')]
+        other_files = [f for f in extracted_files if f not in image_files and f not in metadata_files]
+        
+        logger.debug("File analysis: %d real images, %d metadata files, %d other files", len(image_files), len(metadata_files), len(other_files))
+        
+        # Upload each image to DO Spaces
+        uploaded_count = 0
+        skipped_count = 0
+        
+        logger.debug("Starting file processing loop...")
+        
+        for root, dirs, files in os.walk(temp_images_dir):
+            logger.debug("Processing directory: %s with %d files", root, len(files))
+            for file in files:
+                logger.debug("Processing file: %s", file)
+                
+                # Skip macOS metadata files and non-image files
+                if file.startswith('._') or file.startswith('.DS_Store'):
+                    logger.debug("Skipping macOS metadata file: %s", file)
+                    skipped_count += 1
+                    continue
+                
+                if file.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    file_path = os.path.join(root, file)
+                    file_size = os.path.getsize(file_path)
+                    logger.info("🖼️ FOUND IMAGE: %s (%d bytes)", file_path, file_size)
+                    
+                    # Generate DO Spaces path
+                    do_path = f"{tenant_id}/defects/images/{project_id}/{file}"
+                    logger.debug("DO Spaces path: %s", do_path)
+                    
+                    # Upload to DO Spaces
+                    try:
+                        logger.debug("Uploading %s to DO Spaces...", file)
+                        with open(file_path, 'rb') as f:
+                            s3_client.upload_fileobj(
+                                f,
+                                DO_SPACES_BUCKET,
+                                do_path,
+                                ExtraArgs={'ACL': 'private'}
+                            )
+                        logger.info("✅ Successfully uploaded %s (%d bytes)", file, file_size)  # Changed to INFO level
+                        uploaded_count += 1
+                        
+                        # Create DefectImage record and link to correct defect
+                        file_uuid = file.replace('.jpg', '').replace('.jpeg', '').replace('.png', '')
+                        defect_id = photo_to_defect_map.get(file_uuid)
+                        
+                        if defect_id:
+                            logger.debug("Found defect mapping: %s -> defect %s", file_uuid, defect_id)
+                        else:
+                            logger.warning("No defect mapping found for image %s (UUID: %s)", file, file_uuid)
+                        
+                        try:
+                            # Convert string defect_id to UUID if it exists
+                            defect_uuid = uuid.UUID(defect_id) if defect_id else None
+                            
+                            defect_image = DefectImage(
+                                defect_id=defect_uuid,  # Use UUID object or None
+                                fulcrum_filename=file,
+                                file_path=do_path,
+                                file_size=file_size,
+                                mime_type='image/jpeg' if file.lower().endswith(('.jpg', '.jpeg')) else 'image/png'
+                            )
+                            db.add(defect_image)
+                            db.flush()  # Flush to get the ID
+                            
+                            if defect_id:
+                                logger.info("✅ Created DefectImage record (ID: %s) for %s -> Defect %s", defect_image.id, file, defect_id)
+                            else:
+                                logger.info("✅ Created DefectImage record (ID: %s) for %s (no defect link)", defect_image.id, file)
+                        except Exception as db_error:
+                            logger.error("Error creating DefectImage record for %s: %s", file, str(db_error))
+                            # Don't fail the upload, just log the error
+                        
+                    except ClientError as e:
+                        logger.error("Error uploading %s: %s", file, str(e))
+                        raise Exception(f"Error uploading {file}: {str(e)}")
+                    except Exception as e:
+                        logger.error("Unexpected error uploading %s: %s", file, str(e))
+                        raise Exception(f"Unexpected error uploading {file}: {str(e)}")
+                else:
+                    logger.debug("Skipping non-image file: %s", file)
+                    skipped_count += 1
+        
+        logger.debug("Image processing complete. Uploaded: %d, Skipped: %d", uploaded_count, skipped_count)
+        db.commit()
+        logger.debug("Database commit successful")
+        
+    except Exception as e:
+        logger.exception("Error in process_images for project %s", project_id)
+        db.rollback()
+        raise Exception(f"Error processing images: {str(e)}")
+        
+    finally:
+        if temp_images_dir and os.path.exists(temp_images_dir):
+            shutil.rmtree(temp_images_dir)
+            logger.debug("Cleaned up temp directory: %s", temp_images_dir)
+
+
+@router.get("/presigned/{image_id}",
+    summary="Get pre-signed URL for image",
+    description="Generate a pre-signed URL for accessing an image from Digital Ocean Spaces",
+    response_description="Pre-signed URL and expiration time",
+    responses={
+        200: {
+            "description": "Pre-signed URL generated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "url": "https://fra1.digitaloceanspaces.com/bucket/...",
+                        "expires_at": "2024-01-01T12:00:00Z"
+                    }
+                }
+            }
+        },
+        404: {"description": "Image not found"},
+        500: {"description": "Error generating pre-signed URL"}
+    }
+)
+async def get_presigned_url(
+    image_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Generate a pre-signed URL for accessing an image.
+    
+    URLs are valid for 1 hour and can be cached.
+    """
+    
+    # Get image record
+    image = db.query(DefectImage).filter(DefectImage.id == image_id).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    try:
+        # Generate pre-signed URL
+        url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': DO_SPACES_BUCKET,
+                'Key': image.file_path
+            },
+            ExpiresIn=3600  # 1 hour
+        )
+        
+        expires_at = datetime.utcnow().isoformat() + 'Z'
+        
+        return {
+            "url": url,
+            "expires_at": expires_at
+        }
+        
+    except ClientError as e:
+        raise HTTPException(status_code=500, detail=f"Error generating pre-signed URL: {str(e)}")
