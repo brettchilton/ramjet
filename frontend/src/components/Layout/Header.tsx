@@ -1,6 +1,7 @@
 import { useContext } from 'react';
-import { LogOut, User, Sun, Moon, Home, Settings } from 'lucide-react';
-import { useNavigate } from '@tanstack/react-router';
+import { LogOut, Sun, Moon, Settings } from 'lucide-react';
+import logo from '@/assets/logo.png';
+import { useNavigate, useLocation } from '@tanstack/react-router';
 import { useUnifiedAuth } from '../../hooks/useUnifiedAuth';
 import { ColorModeContext } from '../../ColorModeContext';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 export function Header() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useUnifiedAuth();
   const colorMode = useContext(ColorModeContext);
 
@@ -26,28 +28,35 @@ export function Header() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-gray-950/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-gray-950/60">
-      <div className="flex h-14 items-center px-4">
-        {/* Left side - Home and Settings */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate({ to: '/dashboard' })}
-            className="h-9 w-9"
+      <div className="flex h-20 items-center px-4">
+        {/* Left side - Logo */}
+        <button
+          onClick={() => navigate({ to: '/dashboard' })}
+          className="flex items-center cursor-pointer bg-transparent border-none p-0"
+        >
+          <img
+            src={logo}
+            alt="Ramjet Plastics"
+            className="h-16 w-auto brightness-[1.15] mix-blend-multiply dark:invert dark:brightness-100 dark:mix-blend-screen"
+          />
+        </button>
+
+        {/* Navigation */}
+        <nav className="ml-8 flex items-center gap-1">
+          <button
+            onClick={() => navigate({ to: '/orders' })}
+            className={`relative px-3 py-1.5 text-sm font-medium transition-colors rounded-md ${
+              location.pathname.startsWith('/orders')
+                ? 'text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
-            <Home className="h-4 w-4" />
-            <span className="sr-only">Home</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate({ to: '/settings' })}
-            className="h-9 w-9"
-          >
-            <Settings className="h-4 w-4" />
-            <span className="sr-only">Settings</span>
-          </Button>
-        </div>
+            Orders
+            {location.pathname.startsWith('/orders') && (
+              <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-foreground rounded-full" />
+            )}
+          </button>
+        </nav>
 
         {/* Right side - User, Theme, Logout */}
         <div className="ml-auto flex items-center gap-2">

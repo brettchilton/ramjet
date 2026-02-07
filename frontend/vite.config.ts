@@ -15,7 +15,7 @@ export default defineConfig({
     host: true, // This makes the Vite server accessible from outside the container
     port: 5179, // Default Vite dev server port
     watch: {
-      usePolling: true // Needed for hot-reloading to work reliably in Docker containers
-    }
-  }
+      usePolling: true, // Needed for hot-reloading to work reliably in Docker containers
+    },
+  },
 })

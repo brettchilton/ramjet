@@ -6,7 +6,7 @@ from app.core.database import get_db
 from app.core.models import User
 from app.core.auth import get_current_user
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(prefix="/auth/session", tags=["authentication"])
 
 @router.get("/me")
 async def get_current_user_info(

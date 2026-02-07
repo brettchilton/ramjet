@@ -52,9 +52,17 @@ services:
       MAIL_FROM_EMAIL: ${MAIL_FROM_EMAIL}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME}
       FRONTEND_URL: ${FRONTEND_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      VITE_USE_SIMPLE_AUTH: ${VITE_USE_SIMPLE_AUTH:-false}
       KRATOS_PUBLIC_URL: http://kratos:4433
       KRATOS_ADMIN_URL: http://kratos:4434
       KRATOS_WEBHOOK_SECRET: ${KRATOS_WEBHOOK_SECRET:-your-webhook-secret}
+      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
+      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
+      GMAIL_REFRESH_TOKEN: ${GMAIL_REFRESH_TOKEN:-}
+      GMAIL_POLL_INTERVAL_SECONDS: ${GMAIL_POLL_INTERVAL_SECONDS:-60}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-5-20250929}
     depends_on:
       - db
     volumes:
@@ -72,6 +80,10 @@ services:
     build: ./frontend # Instructs Docker to build from the Dockerfile in the ./frontend directory
     container_name: eezy_peezy_frontend
     restart: always
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
       - '5179:5179' # Maps host port 5179 to container port 5179
     environment:

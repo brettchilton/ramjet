@@ -16,6 +16,8 @@ import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OrdersIndexRouteImport } from './routes/orders/index'
+import { Route as OrdersOrderIdRouteImport } from './routes/orders/$orderId'
 import { Route as AuthVerificationRouteImport } from './routes/auth/verification'
 import { Route as AuthRegistrationRouteImport } from './routes/auth/registration'
 import { Route as AuthRecoveryRouteImport } from './routes/auth/recovery'
@@ -57,6 +59,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrdersIndexRoute = OrdersIndexRouteImport.update({
+  id: '/orders/',
+  path: '/orders/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrdersOrderIdRoute = OrdersOrderIdRouteImport.update({
+  id: '/orders/$orderId',
+  path: '/orders/$orderId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthVerificationRoute = AuthVerificationRouteImport.update({
   id: '/auth/verification',
   path: '/auth/verification',
@@ -96,6 +108,8 @@ export interface FileRoutesByFullPath {
   '/auth/recovery': typeof AuthRecoveryRoute
   '/auth/registration': typeof AuthRegistrationRoute
   '/auth/verification': typeof AuthVerificationRoute
+  '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/orders/': typeof OrdersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -110,6 +124,8 @@ export interface FileRoutesByTo {
   '/auth/recovery': typeof AuthRecoveryRoute
   '/auth/registration': typeof AuthRegistrationRoute
   '/auth/verification': typeof AuthVerificationRoute
+  '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/orders': typeof OrdersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,6 +141,8 @@ export interface FileRoutesById {
   '/auth/recovery': typeof AuthRecoveryRoute
   '/auth/registration': typeof AuthRegistrationRoute
   '/auth/verification': typeof AuthVerificationRoute
+  '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/orders/': typeof OrdersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,6 +159,8 @@ export interface FileRouteTypes {
     | '/auth/recovery'
     | '/auth/registration'
     | '/auth/verification'
+    | '/orders/$orderId'
+    | '/orders/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -155,6 +175,8 @@ export interface FileRouteTypes {
     | '/auth/recovery'
     | '/auth/registration'
     | '/auth/verification'
+    | '/orders/$orderId'
+    | '/orders'
   id:
     | '__root__'
     | '/'
@@ -169,6 +191,8 @@ export interface FileRouteTypes {
     | '/auth/recovery'
     | '/auth/registration'
     | '/auth/verification'
+    | '/orders/$orderId'
+    | '/orders/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +208,8 @@ export interface RootRouteChildren {
   AuthRecoveryRoute: typeof AuthRecoveryRoute
   AuthRegistrationRoute: typeof AuthRegistrationRoute
   AuthVerificationRoute: typeof AuthVerificationRoute
+  OrdersOrderIdRoute: typeof OrdersOrderIdRoute
+  OrdersIndexRoute: typeof OrdersIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -237,6 +263,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/orders/': {
+      id: '/orders/'
+      path: '/orders'
+      fullPath: '/orders/'
+      preLoaderRoute: typeof OrdersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/orders/$orderId': {
+      id: '/orders/$orderId'
+      path: '/orders/$orderId'
+      fullPath: '/orders/$orderId'
+      preLoaderRoute: typeof OrdersOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/verification': {
       id: '/auth/verification'
       path: '/auth/verification'
@@ -288,6 +328,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRecoveryRoute: AuthRecoveryRoute,
   AuthRegistrationRoute: AuthRegistrationRoute,
   AuthVerificationRoute: AuthVerificationRoute,
+  OrdersOrderIdRoute: OrdersOrderIdRoute,
+  OrdersIndexRoute: OrdersIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

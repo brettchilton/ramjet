@@ -13,7 +13,7 @@ function HomePage() {
   useEffect(() => {
     if (!loading) {
       if (isAuthenticated) {
-        navigate({ to: '/dashboard', replace: true });
+        navigate({ to: '/orders', replace: true });
       } else {
         navigate({ to: '/login', replace: true });
       }

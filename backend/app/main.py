@@ -13,11 +13,14 @@ import uuid
 from typing import Dict, Any, Optional
 
 # Import routers
-from app.api import auth_simplified, auth_kratos, auth_simple
+from app.api import auth_simplified, auth_kratos, auth_simple, products, system, orders
 # from app.api import upload  # Temporarily disabled
 
 # Import authentication
 from app.core.auth import get_current_user, get_current_user_optional, require_role
+
+# Import Gmail poller singleton
+from app.services.gmail_service import gmail_poller
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -44,6 +47,9 @@ app.add_middleware(
 app.include_router(auth_simplified.router)
 app.include_router(auth_kratos.router)
 app.include_router(auth_simple.router)
+app.include_router(products.router)
+app.include_router(system.router)
+app.include_router(orders.router)
 
 # Database connection details are pulled from environment variables.
 DB_HOST = os.environ.get('DB_HOST')
@@ -72,6 +78,14 @@ async def startup_event():
             )
             conn.close() # Close the connection immediately after successful test
             print("Successfully connected to the database!")
+
+            # Conditionally start Gmail poller if credentials are configured
+            if os.environ.get("GMAIL_REFRESH_TOKEN"):
+                print("Gmail credentials found — starting email poller...")
+                await gmail_poller.start()
+            else:
+                print("Gmail credentials not configured — email poller disabled")
+
             return # Exit the loop and continue startup
         except psycopg2.OperationalError as e:
             # Catch specific operational errors related to connection issues
@@ -81,6 +95,13 @@ async def startup_event():
     # If all retries fail, raise an exception to prevent the application from starting
     print("Could not connect to the database after multiple attempts. Application will not start.")
     raise HTTPException(status_code=500, detail="Database startup failed: Could not connect to PostgreSQL.")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    if gmail_poller.is_running:
+        print("Shutting down Gmail poller...")
+        await gmail_poller.stop()
+
 
 # Define a root endpoint (GET /)
 @app.get("/", response_model=Message)

@@ -69,6 +69,10 @@ logs/
 postgres_data/
 redis_data/
 
+# Google OAuth credentials
+client_secret.json
+client_secret_*.json
+
 # Temporary files
 *.tmp
 *.temp
