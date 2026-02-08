@@ -10,7 +10,7 @@
 ### Orders Dashboard (`/orders`)
 - **Status cards row**: Email monitor status, pending/approved/rejected/error count cards
 - **Orders table**: Filterable by status, sortable columns — Status, Customer, PO#, Items, Confidence, Date, Forms indicator
-- **Process Emails button**: Triggers `POST /api/orders/process-pending` to process unprocessed emails
+- **Process Emails button**: Triggers `POST /api/orders/process-pending` to process unprocessed emails (since removed — emails are now auto-processed by the poller)
 - Clickable rows navigate to order review page
 - 30-second auto-refresh polling for new orders
 

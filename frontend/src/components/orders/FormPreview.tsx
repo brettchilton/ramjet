@@ -11,6 +11,13 @@ import {
 import { Download, FileSpreadsheet } from 'lucide-react';
 import type { OrderDetail, OrderLineItem } from '@/types/orders';
 
+function formatCurrency(value: number | string | null | undefined): string {
+  if (value == null) return '—';
+  const num = typeof value === 'string' ? Number(value) : value;
+  if (isNaN(num)) return '—';
+  return `$${num.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 interface FormPreviewProps {
   order: OrderDetail;
 }
@@ -38,8 +45,11 @@ export function FormPreview({ order }: FormPreviewProps) {
       </div>
 
       <Tabs defaultValue="office-order">
-        <TabsList className="w-full justify-start flex-wrap h-auto gap-1">
-          <TabsTrigger value="office-order" className="gap-1.5">
+        <TabsList className="w-full justify-start flex-wrap h-auto gap-2 bg-transparent p-0">
+          <TabsTrigger
+            value="office-order"
+            className="gap-1.5 rounded-md border border-border px-4 py-2 text-sm font-medium data-[state=active]:border-blue-500 data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-500 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/50"
+          >
             <FileSpreadsheet className="h-3.5 w-3.5" />
             Office Order
           </TabsTrigger>
@@ -47,9 +57,9 @@ export function FormPreview({ order }: FormPreviewProps) {
             <TabsTrigger
               key={item.id}
               value={`wo-${item.id}`}
-              className="gap-1.5"
+              className="gap-1.5 rounded-md border border-border px-4 py-2 text-sm font-medium data-[state=active]:border-blue-500 data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-500 data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/50"
             >
-              WO: {item.product_code || `Line ${item.line_number}`}
+              WO-{item.line_number}: {item.product_code || 'Unmatched'}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -73,10 +83,12 @@ export function FormPreview({ order }: FormPreviewProps) {
 }
 
 function OfficeOrderPreview({ order }: { order: OrderDetail }) {
-  const grandTotal = order.line_items.reduce(
+  const subtotal = order.line_items.reduce(
     (sum, item) => sum + (Number(item.line_total) || 0),
     0
   );
+  const gst = subtotal * 0.1;
+  const grandTotal = subtotal + gst;
 
   return (
     <div className="rounded-md border overflow-x-auto">
@@ -149,20 +161,32 @@ function OfficeOrderPreview({ order }: { order: OrderDetail }) {
               <td className="p-2">{item.colour || '—'}</td>
               <td className="p-2 text-right">{item.quantity}</td>
               <td className="p-2 text-right">
-                {item.unit_price ? `$${Number(item.unit_price).toFixed(2)}` : '—'}
+                {formatCurrency(item.unit_price)}
               </td>
               <td className="p-2 text-right font-medium">
-                {item.line_total ? `$${Number(item.line_total).toFixed(2)}` : '—'}
+                {formatCurrency(item.line_total)}
               </td>
             </tr>
           ))}
 
-          {/* Grand total */}
+          {/* Subtotal, GST, Grand Total */}
+          <tr className="bg-muted/30">
+            <td colSpan={6} className="p-2 text-right font-medium">
+              Subtotal
+            </td>
+            <td className="p-2 text-right font-medium">{formatCurrency(subtotal)}</td>
+          </tr>
+          <tr className="bg-muted/30">
+            <td colSpan={6} className="p-2 text-right font-medium">
+              GST (10%)
+            </td>
+            <td className="p-2 text-right font-medium">{formatCurrency(gst)}</td>
+          </tr>
           <tr className="bg-muted/30 font-bold">
             <td colSpan={6} className="p-2 text-right">
-              Grand Total
+              Total (inc. GST)
             </td>
-            <td className="p-2 text-right">${grandTotal.toFixed(2)}</td>
+            <td className="p-2 text-right">{formatCurrency(grandTotal)}</td>
           </tr>
         </tbody>
       </table>

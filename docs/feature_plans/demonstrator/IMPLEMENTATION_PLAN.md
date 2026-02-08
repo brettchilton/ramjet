@@ -1,3 +1,5 @@
+> **Note:** This is a pre-implementation planning document. The actual implementation uses PostgreSQL, FastAPI, and React (not SQLite, Flask, or IMAP as described here). See `docs/feature_plans/order_automation/` for implementation docs.
+
 # Ramjet Plastics - Order Automation Implementation Plan
 
 **Version:** 1.0  

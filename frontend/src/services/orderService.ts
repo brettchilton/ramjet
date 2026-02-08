@@ -55,6 +55,11 @@ export async function rejectOrder(id: string, reason: string): Promise<RejectRes
   return res.json();
 }
 
+export async function deleteOrder(id: string): Promise<void> {
+  const res = await apiClient.delete(`/api/orders/${id}`);
+  if (!res.ok) throw new Error('Failed to delete order');
+}
+
 // ── Download URLs ────────────────────────────────────────────────────
 
 export function getOfficeOrderUrl(id: string): string {

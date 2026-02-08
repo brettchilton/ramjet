@@ -1,3 +1,5 @@
+> **Note:** This is a pre-implementation planning document. The actual implementation uses PostgreSQL, FastAPI, and React. See `docs/feature_plans/order_automation/` for implementation docs.
+
 # Project Files - What's Included
 
 **Created:** February 7, 2026  

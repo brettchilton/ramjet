@@ -13,6 +13,13 @@ import {
 } from '@/components/ui/table';
 import { ConfidenceBadge } from '@/components/orders/ConfidenceBadge';
 import { cn } from '@/lib/utils';
+
+function formatCurrency(value: number | string | null | undefined): string {
+  if (value == null) return '—';
+  const num = typeof value === 'string' ? Number(value) : value;
+  if (isNaN(num)) return '—';
+  return `$${num.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 import { AlertCircle } from 'lucide-react';
 import type { OrderDetail } from '@/types/orders';
 
@@ -61,10 +68,12 @@ export function OrderDataForm({ order, isEditing, onSave }: OrderDataFormProps) 
   const { fields } = useFieldArray({ control, name: 'line_items' });
   const watchedLineItems = watch('line_items');
 
-  // Reset form when order data changes
+  // Reset form when order data changes (skip while editing to prevent flash)
   useEffect(() => {
-    reset(getDefaults(order));
-  }, [order, reset]);
+    if (!isEditing) {
+      reset(getDefaults(order));
+    }
+  }, [order, reset, isEditing]);
 
   // Auto-calc line totals when qty or price changes
   useEffect(() => {
@@ -232,16 +241,12 @@ export function OrderDataForm({ order, isEditing, onSave }: OrderDataFormProps) 
                         />
                       ) : (
                         <span className="text-sm">
-                          {item?.unit_price != null
-                            ? `$${Number(item.unit_price).toFixed(2)}`
-                            : '—'}
+                          {formatCurrency(item?.unit_price)}
                         </span>
                       )}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {item?.line_total != null
-                        ? `$${Number(item.line_total).toFixed(2)}`
-                        : '—'}
+                      {formatCurrency(item?.line_total)}
                     </TableCell>
                     <TableCell className="text-center">
                       <ConfidenceBadge confidence={item?.confidence} />
@@ -253,20 +258,28 @@ export function OrderDataForm({ order, isEditing, onSave }: OrderDataFormProps) 
           </Table>
         </div>
 
-        {/* Grand total */}
-        {watchedLineItems && watchedLineItems.length > 0 && (
-          <div className="flex justify-end mt-2 pr-20">
-            <span className="text-sm font-medium text-muted-foreground mr-4">
-              Grand Total:
-            </span>
-            <span className="text-sm font-bold">
-              $
-              {watchedLineItems
-                .reduce((sum, item) => sum + (Number(item.line_total) || 0), 0)
-                .toFixed(2)}
-            </span>
-          </div>
-        )}
+        {/* Totals */}
+        {watchedLineItems && watchedLineItems.length > 0 && (() => {
+          const subtotal = watchedLineItems.reduce((sum, item) => sum + (Number(item.line_total) || 0), 0);
+          const gst = subtotal * 0.1;
+          const total = subtotal + gst;
+          return (
+            <div className="flex flex-col items-end mt-2 pr-20 gap-1">
+              <div className="flex gap-4">
+                <span className="text-sm font-medium text-muted-foreground">Subtotal:</span>
+                <span className="text-sm font-medium">{formatCurrency(subtotal)}</span>
+              </div>
+              <div className="flex gap-4">
+                <span className="text-sm font-medium text-muted-foreground">GST (10%):</span>
+                <span className="text-sm font-medium">{formatCurrency(gst)}</span>
+              </div>
+              <div className="flex gap-4">
+                <span className="text-sm font-medium text-muted-foreground">Total (inc. GST):</span>
+                <span className="text-sm font-bold">{formatCurrency(total)}</span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </form>
   );

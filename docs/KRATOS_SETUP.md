@@ -4,7 +4,7 @@ This document describes how Ory Kratos has been integrated into the application 
 
 ## Overview
 
-Ory Kratos complements the existing Ory Hydra OAuth2 setup by providing:
+Ory Kratos provides identity management for the application, including:
 - User registration and profile management
 - Password-based authentication
 - Account recovery (forgot password)

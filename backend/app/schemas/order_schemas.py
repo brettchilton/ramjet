@@ -108,6 +108,7 @@ class ApproveResponse(BaseModel):
     message: str
     office_order_generated: bool
     works_orders_generated: int
+    email_notification_queued: bool = False
 
 
 class RejectResponse(BaseModel):

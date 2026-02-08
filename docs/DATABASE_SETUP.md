@@ -1,6 +1,6 @@
 # Database Setup Guide
 
-This guide will help you set up the database for your application.
+This guide will help you set up the database for the Ramjet application.
 
 ## Quick Start
 
@@ -11,8 +11,9 @@ This guide will help you set up the database for your application.
 
 2. **Enable PostgreSQL UUID extension (required for user IDs):**
    ```bash
-   docker-compose exec db psql -U postgres -d annie_defect -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+   docker-compose exec db psql -U postgres -d ${POSTGRES_DB} -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
    ```
+   > **Note:** Replace `${POSTGRES_DB}` with the value from your `.env` file, or run: `source .env && docker-compose exec db psql -U postgres -d $POSTGRES_DB -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"`
 
 3. **Create migrations directory structure (first time only):**
    ```bash
@@ -43,7 +44,7 @@ This guide will help you set up the database for your application.
 
 ## Database Schema
 
-The database now has a simplified schema with only the `users` table:
+The database name is configured via the `POSTGRES_DB` variable in your `.env` file. The schema includes:
 
 ### Users Table
 ```sql
@@ -60,20 +61,26 @@ CREATE TABLE users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE
 );
-
--- Indexes
-CREATE INDEX idx_user_email ON users(email);
-CREATE INDEX idx_user_kratos_identity ON users(kratos_identity_id);
-CREATE INDEX idx_user_active ON users(is_active);
 ```
+
+### Order Automation Tables
+
+The order automation feature adds several tables. See [FEATURE_OVERVIEW.md](./FEATURE_OVERVIEW.md) for the full schema. Key tables include:
+
+- **orders** — Extracted order header (customer, PO number, status, confidence score)
+- **order_line_items** — Individual line items with product codes, quantities, prices
+- **incoming_emails** — Raw emails fetched from Gmail
+- **email_attachments** — PDF/image attachments linked to emails
+- **products** — Product master data (descriptions, manufacturing specs)
+- **product_material_specs** — Material grades, colours, additives per product
+- **product_packaging_specs** — Packaging configurations per product
 
 ### Key Points:
 - **Dual authentication support**:
   - Simple Auth: Uses `password_hash` field (bcrypt)
   - Kratos Auth: Uses `kratos_identity_id` to link to Kratos identity
-- **Simplified structure** - Single users table, no complex tenant relationships
-- **UUID primary keys** - Using PostgreSQL's `uuid-ossp` extension (must be enabled)
-- **Password security** - Bcrypt hashing with salt rounds when using Simple Auth
+- **UUID primary keys** — Using PostgreSQL's `uuid-ossp` extension (must be enabled)
+- **Password security** — Bcrypt hashing with salt rounds when using Simple Auth
 
 ## Database Access
 
@@ -81,12 +88,12 @@ CREATE INDEX idx_user_active ON users(is_active);
   - Server: `db`
   - Username: `postgres` (from .env: POSTGRES_USER)
   - Password: (from .env: POSTGRES_PASSWORD)
-  - Database: `annie_defect`
+  - Database: (from .env: POSTGRES_DB)
 
 - **Direct PostgreSQL connection:**
   - Host: `localhost`
   - Port: `5435`
-  - Database: `annie_defect`
+  - Database: (from .env: POSTGRES_DB)
   - Username: `postgres`
   - Password: (from .env)
 
@@ -110,11 +117,14 @@ docker-compose up -d db
 sleep 5
 
 # Create Kratos database (if using production auth)
-docker exec app_postgres psql -U postgres -d app_database -c "CREATE DATABASE kratos;"
+docker exec eezy_peezy_postgres psql -U postgres -c "CREATE DATABASE kratos;"
 
 # Run migrations
 docker-compose exec kratos kratos migrate sql -e --yes
 docker-compose exec backend alembic upgrade head
+
+# Seed products
+docker-compose exec backend python scripts/seed_products.py
 
 # Start all services
 docker-compose up -d
@@ -146,7 +156,7 @@ docker-compose exec backend alembic history
 
 **Database connection issues:**
 - Make sure Docker containers are running: `docker ps`
-- Check logs: `docker logs app_postgres`
+- Check logs: `docker logs eezy_peezy_postgres`
 - Verify .env file has correct credentials
 
 **Migration issues:**
@@ -155,7 +165,7 @@ docker-compose exec backend alembic history
 - Re-run migrations: `docker-compose exec backend alembic upgrade head`
 
 **Kratos database missing:**
-- Create manually: `docker exec app_postgres psql -U postgres -d app_database -c "CREATE DATABASE kratos;"`
+- Create manually: `docker exec eezy_peezy_postgres psql -U postgres -c "CREATE DATABASE kratos;"`
 - Run migrations: `docker-compose exec kratos kratos migrate sql -e --yes`
 
 **Port conflicts:**

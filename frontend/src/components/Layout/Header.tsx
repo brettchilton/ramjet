@@ -45,7 +45,7 @@ export function Header() {
         <nav className="ml-8 flex items-center gap-1">
           <button
             onClick={() => navigate({ to: '/orders' })}
-            className={`relative px-3 py-1.5 text-sm font-medium transition-colors rounded-md ${
+            className={`relative px-3 py-1.5 text-4xl font-semibold uppercase tracking-wide transition-colors rounded-md ${
               location.pathname.startsWith('/orders')
                 ? 'text-foreground'
                 : 'text-muted-foreground hover:text-foreground'
@@ -64,15 +64,12 @@ export function Header() {
           {user && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-9 gap-2 px-2">
-                  <Avatar className="h-7 w-7">
-                    <AvatarFallback className="text-xs">
+                <Button variant="ghost" className="relative h-14 w-14 rounded-full p-0">
+                  <Avatar className="h-14 w-14">
+                    <AvatarFallback className="text-xl font-semibold">
                       {user.first_name?.[0]?.toUpperCase()}{user.last_name?.[0]?.toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="hidden md:inline-block text-sm">
-                    {user.first_name} {user.last_name}
-                  </span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
@@ -105,10 +102,10 @@ export function Header() {
             variant="ghost"
             size="icon"
             onClick={colorMode.toggleColorMode}
-            className="relative h-9 w-9"
+            className="relative h-14 w-14"
           >
-            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <Sun className="h-7 w-7 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-7 w-7 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             <span className="sr-only">Toggle theme (currently {colorMode.mode})</span>
           </Button>
 

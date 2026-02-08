@@ -39,10 +39,10 @@ def main():
         sys.exit(1)
 
     print("Starting OAuth2 consent flow...")
-    print("A browser window will open for Google sign-in.\n")
+    print("Open the URL printed below in your browser, sign in, and authorize.\n")
 
     flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
-    creds = flow.run_local_server(port=8090)
+    creds = flow.run_local_server(port=8090, open_browser=False, bind_addr="0.0.0.0")
 
     # Read client_id and client_secret from the JSON file
     with open(CLIENT_SECRET_FILE) as f:

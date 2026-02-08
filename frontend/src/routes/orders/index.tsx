@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { AuthGuard } from '@/components/AuthGuard';
 import { useOrders, useEmailMonitorStatus } from '@/hooks/useOrders';
@@ -38,6 +38,7 @@ function OrdersDashboard() {
 
 function OrdersDashboardContent() {
   const navigate = useNavigate();
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
   const { data: orders, isLoading: ordersLoading } = useOrders();
   const { data: emailStatus } = useEmailMonitorStatus();
@@ -52,6 +53,16 @@ function OrdersDashboardContent() {
       total: orders.length,
     };
   }, [orders]);
+
+  const toggleFilter = (status: string) => {
+    setStatusFilter((prev) => (prev === status ? null : status));
+  };
+
+  const displayedOrders = useMemo(() => {
+    if (!orders) return [];
+    if (statusFilter) return orders.filter((o) => o.status === statusFilter);
+    return orders.filter((o) => o.status !== 'error');
+  }, [orders, statusFilter]);
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '—';
@@ -86,7 +97,10 @@ function OrdersDashboardContent() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className={`cursor-pointer transition-colors ${statusFilter === 'pending' ? 'border-blue-500 bg-blue-500/5' : 'hover:border-blue-300'}`}
+          onClick={() => toggleFilter('pending')}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending</CardTitle>
             <Clock className="h-4 w-4 text-blue-500" />
@@ -96,7 +110,10 @@ function OrdersDashboardContent() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className={`cursor-pointer transition-colors ${statusFilter === 'approved' ? 'border-green-500 bg-green-500/5' : 'hover:border-green-300'}`}
+          onClick={() => toggleFilter('approved')}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Approved</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-500" />
@@ -106,7 +123,10 @@ function OrdersDashboardContent() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className={`cursor-pointer transition-colors ${statusFilter === 'rejected' ? 'border-red-500 bg-red-500/5' : 'hover:border-red-300'}`}
+          onClick={() => toggleFilter('rejected')}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Rejected</CardTitle>
             <XCircle className="h-4 w-4 text-red-500" />
@@ -116,7 +136,10 @@ function OrdersDashboardContent() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className={`cursor-pointer transition-colors ${statusFilter === 'error' ? 'border-orange-500 bg-orange-500/5' : 'hover:border-orange-300'}`}
+          onClick={() => toggleFilter('error')}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Errors</CardTitle>
             <AlertCircle className="h-4 w-4 text-orange-500" />
@@ -134,11 +157,17 @@ function OrdersDashboardContent() {
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
-      ) : (orders ?? []).length === 0 ? (
+      ) : displayedOrders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Package className="h-12 w-12 mb-4" />
-          <p className="text-lg font-medium">No orders found</p>
-          <p className="text-sm">Orders will appear here when emails are processed</p>
+          <p className="text-lg font-medium">
+            {statusFilter ? `No ${statusFilter} orders` : 'No orders found'}
+          </p>
+          <p className="text-sm">
+            {statusFilter
+              ? 'Click the card again to clear the filter'
+              : 'Orders will appear here when emails are processed'}
+          </p>
         </div>
       ) : (
         <div className="rounded-md border">
@@ -155,7 +184,7 @@ function OrdersDashboardContent() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(orders ?? []).map((order) => (
+              {displayedOrders.map((order) => (
                 <TableRow
                   key={order.id}
                   className="cursor-pointer"

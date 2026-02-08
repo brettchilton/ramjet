@@ -13,12 +13,13 @@ backend/
 │   ├── main.py              # FastAPI app initialization
 │   ├── api/                 # API endpoints/routes
 │   ├── core/                # Core functionality
-│   ├── services/            # Business logic
+│   ├── services/            # Business logic (order automation)
+│   ├── schemas/             # Pydantic request/response models
 │   ├── agents/              # AI agent implementations
 │   └── scripts/             # Application-specific scripts
+├── scripts/                 # Standalone utility scripts
 ├── migrations/              # Database migrations (Alembic)
 ├── sandbox/                 # Development templates
-├── scripts/                 # Standalone utility scripts
 ├── data/                    # Local data storage
 ├── alembic.ini             # Alembic configuration
 ├── requirements.txt        # Python dependencies
@@ -41,20 +42,29 @@ Contains all API endpoint definitions organized by resource:
 - `auth_simple.py` - Simple JWT authentication (development)
 - `auth_kratos.py` - Kratos integration endpoints (production)
 - `auth_simplified.py` - Simplified auth wrapper endpoints
-- Future: Add your own API endpoints here (upload, buildings, etc.)
+- `orders.py` - Order processing, review, approval/rejection endpoints
+- `products.py` - Product database lookup endpoints
+- `system.py` - System status, email monitoring, email detail endpoints
 
 ### `app/core/`
 Core application components:
 - `database.py` - Database connection and session management
-- `models.py` - SQLAlchemy ORM models (includes password_hash field for users)
+- `models.py` - SQLAlchemy ORM models (users, orders, products, emails)
 - `auth.py` - JWT authentication, password hashing, and token validation
 - `user_sync.py` - User-tenant synchronization logic
 
 ### `app/services/`
-Business logic layer (currently empty, for future use):
-- Data processing services
-- External API integrations
-- Complex business operations
+Business logic layer for order automation:
+- `gmail_service.py` - Gmail API integration for polling and fetching emails
+- `extraction_service.py` - Anthropic Claude integration for extracting structured order data from emails/PDFs
+- `enrichment_service.py` - Product database lookup, manufacturing specs, material calculations
+- `form_generation_service.py` - Office Order and Works Order Excel form generation
+
+### `app/schemas/`
+Pydantic models for request/response validation:
+- `order_schemas.py` - Order, line item, and approval schemas
+- `product_schemas.py` - Product lookup and specification schemas
+- `email_schemas.py` - Email and attachment schemas
 
 ### `app/agents/`
 AI agent implementations using OpenAI Agents SDK:
@@ -64,10 +74,11 @@ AI agent implementations using OpenAI Agents SDK:
   - `workflow.py` - Workflow orchestrator classes
   - `example.py` - Example usage of agent workflows
 
-### `app/scripts/`
-Application-specific scripts (currently empty, for future use):
-- Data migration scripts
-- Batch processing utilities
+### `scripts/` (backend root)
+Standalone utility scripts:
+- `gmail_oauth_setup.py` - Set up Gmail OAuth credentials for email monitoring
+- `seed_products.py` - Populate the product database with initial data
+- `create_test_data.py` - Generate test data for development
 
 ## Import Patterns
 
@@ -75,9 +86,10 @@ Application-specific scripts (currently empty, for future use):
 ```python
 # From app/api/endpoints.py
 from app.core.database import get_db
-from app.core.models import User, YourModel
+from app.core.models import User, Order, Product
 from app.core.auth import get_current_user
-from app.services.your_service import YourService
+from app.services.extraction_service import ExtractionService
+from app.schemas.order_schemas import OrderResponse
 ```
 
 ### From external modules
@@ -126,7 +138,7 @@ from app.core.database import get_db
 class YourService:
     def __init__(self, db_session):
         self.db = db_session
-    
+
     def process_data(self, data_id: str):
         # Implementation
 ```
@@ -165,22 +177,22 @@ The application uses environment variables for configuration:
 DB_HOST=db
 POSTGRES_USER=username
 POSTGRES_PASSWORD=password
-POSTGRES_DB=app_database
+POSTGRES_DB=your_database_name
 
 # Authentication
 SECRET_KEY=your-jwt-secret-key
 
-# Redis (for password reset codes)
-REDIS_HOST=redis
-REDIS_PORT=6379
+# AI Services
+ANTHROPIC_API_KEY=sk-ant-xxxxx
+
+# Gmail API
+GMAIL_DELEGATED_USER=catchment@ramjetplastics.com
+GMAIL_CREDENTIALS_FILE=client_secret.json
 
 # Storage
 DO_SPACES_BUCKET=bucket-name
 DO_SPACES_KEY=access-key
 DO_SPACES_SECRET=secret-key
-
-# AI
-OPENAI_API_KEY=your-api-key
 ```
 
 ## Docker Considerations
@@ -197,11 +209,12 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload
 3. **New Dependencies**: Add to `requirements.txt` and rebuild container
 4. **Templates**: Keep reusable code templates in `sandbox/`
 
-## Testing Structure (Future)
+## Testing Structure
 
 ```
 backend/
 ├── tests/
+│   ├── test_form_generation.py
 │   ├── unit/
 │   │   ├── test_models.py
 │   │   └── test_services.py

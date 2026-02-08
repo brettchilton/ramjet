@@ -6,14 +6,21 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core.database import get_db, engine
 from app.core.models import Base, User
+import logging
 import os
 import psycopg2
 import time
 import uuid
 from typing import Dict, Any, Optional
 
+# Configure logging so all app.* loggers output to stdout
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
 # Import routers
-from app.api import auth_simplified, auth_kratos, auth_simple, products, system, orders
+from app.api import auth_simplified, auth_kratos, auth_simple, products, system, orders, settings, analytics
 # from app.api import upload  # Temporarily disabled
 
 # Import authentication
@@ -50,6 +57,8 @@ app.include_router(auth_simple.router)
 app.include_router(products.router)
 app.include_router(system.router)
 app.include_router(orders.router)
+app.include_router(settings.router)
+app.include_router(analytics.router)
 
 # Database connection details are pulled from environment variables.
 DB_HOST = os.environ.get('DB_HOST')

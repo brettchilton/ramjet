@@ -1,17 +1,17 @@
-# Full-Stack Application Template
+# Ramjet Plastics — Order Automation Platform
 
-A modern web application template with authentication, AI agent integration, and MCP (Model Context Protocol) servers for extensible functionality.
+A web application that automates order processing for Ramjet Plastics. Monitors a Gmail inbox for customer purchase orders, extracts order data using AI (Anthropic Claude), enriches it with product specs from a database, generates Office Order and Works Order forms, and presents them for review/approval.
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Clone repository
 git clone <repository-url>
-cd micro_two
+cd ramjet
 
 # Copy and configure environment variables
 cp .env.example .env
-# Edit .env with your settings (database credentials are required)
+# Edit .env with your settings (database credentials, Gmail OAuth, Anthropic API key)
 
 # Start development environment (Simple Auth - no Kratos)
 ./start-dev.sh
@@ -20,31 +20,34 @@ cp .env.example .env
 docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 # Enable PostgreSQL UUID extension (first time only)
-docker-compose exec db psql -U postgres -d annie_defect -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+docker-compose exec db psql -U postgres -d ${POSTGRES_DB} -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
 
 # Run database migrations (first time only)
 docker-compose exec backend alembic upgrade head
 
+# Seed product database (first time only)
+docker-compose exec backend python scripts/seed_products.py
+
 # Access the application
 open http://localhost:5179
-
-# Create an account (Simple Auth for development)
-open http://localhost:5179/simple-register
 ```
 
-## 📋 Features
+## Features
 
-### MCP Servers
-- **Excel MCP**: Advanced Excel file manipulation, analysis, and reporting
+### Order Automation
+- **Email Monitoring**: Gmail API polling for incoming customer purchase orders
+- **AI Extraction**: Anthropic Claude extracts structured order data from emails and PDF attachments
+- **Product Enrichment**: Automatic lookup of manufacturing specs, materials, packaging from product database
+- **Form Generation**: Auto-generates Office Order and Works Order Excel spreadsheets
+- **Review Workflow**: Dashboard for reviewing, editing, approving, or rejecting extracted orders
 
 ### Core Platform
 - **Dual Authentication System**: Simple JWT for development, Ory Kratos for production
-- **AI Agent Integration**: OpenAI-powered workflows and analysis
+- **MCP Servers**: Excel MCP for advanced spreadsheet manipulation
 - **Cloud Storage**: Digital Ocean Spaces integration
 - **Role-Based Access**: Customizable user roles and permissions
-- **Extensible Architecture**: Ready for your custom features
 
-## 🏗️ Architecture
+## Architecture
 
 ### Services
 
@@ -68,22 +71,23 @@ open http://localhost:5179/simple-register
 - Python 3.11+ with FastAPI
 - SQLAlchemy ORM with Alembic migrations
 - Dual auth: Simple JWT (dev) / Ory Kratos (prod)
-- OpenAI integration for AI analysis
+- Anthropic Claude API for order data extraction
+- Gmail API for email monitoring
 - Boto3 for Digital Ocean Spaces
 
 **Frontend**
 - React 18 with TypeScript
 - Vite for fast development
 - TanStack Router for routing
+- TanStack Query for data fetching
 - shadcn/ui + Tailwind CSS for components
-- Native fetch via apiClient
 
 **Infrastructure**
 - Docker & Docker Compose
 - PostgreSQL (single database with optional Kratos DB)
 - Digital Ocean Spaces for file storage (optional)
 
-## 🔧 Configuration
+## Configuration
 
 ### Required Environment Variables
 
@@ -91,7 +95,7 @@ open http://localhost:5179/simple-register
 # Database
 POSTGRES_USER=your_username
 POSTGRES_PASSWORD=your_password
-POSTGRES_DB=annie_defect
+POSTGRES_DB=your_database_name
 
 # Authentication
 SECRET_KEY=your-secret-key-change-this-in-production  # JWT secret
@@ -100,6 +104,13 @@ VITE_USE_SIMPLE_AUTH=true  # Use simple auth (set to false for Kratos in product
 # Ory Kratos (Production Auth)
 KRATOS_COOKIE_SECRET=your-32-char-secret-here
 KRATOS_CIPHER_SECRET=32-CHAR-LONG-SECRET-CHANGE-ME!!!
+
+# Anthropic API (for order extraction)
+ANTHROPIC_API_KEY=sk-ant-xxxxx
+
+# Gmail API (for email monitoring)
+GMAIL_DELEGATED_USER=catchment@ramjetplastics.com
+GMAIL_CREDENTIALS_FILE=client_secret.json
 
 # Digital Ocean Spaces (Optional)
 DO_SPACES_ENDPOINT=https://syd1.digitaloceanspaces.com
@@ -115,7 +126,7 @@ DEBUG=true  # Enable synchronous processing
 LOG_LEVEL=DEBUG  # Verbose logging
 ```
 
-## 🤖 MCP Servers
+## MCP Servers
 
 ### Quick Start
 
@@ -173,7 +184,7 @@ Add to your Claude Desktop config file:
 }
 ```
 
-## 🚦 Development Workflow
+## Development Workflow
 
 ### Starting Services
 
@@ -221,29 +232,54 @@ docker-compose exec backend alembic revision -m "description"
 3. Use Kratos flows for registration/login
 4. Session cookies for authentication
 
-## 📁 Project Structure
+## Project Structure
 
 ```
-micro_two/
+ramjet/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                # FastAPI application
 │   │   ├── api/
 │   │   │   ├── auth_simple.py     # Simple JWT auth
 │   │   │   ├── auth_kratos.py     # Kratos integration
-│   │   │   └── auth_simplified.py # Simplified auth wrapper
+│   │   │   ├── auth_simplified.py # Simplified auth wrapper
+│   │   │   ├── orders.py          # Order processing endpoints
+│   │   │   ├── products.py        # Product lookup endpoints
+│   │   │   └── system.py          # System/email endpoints
+│   │   ├── services/
+│   │   │   ├── gmail_service.py          # Gmail API integration
+│   │   │   ├── extraction_service.py     # Claude AI data extraction
+│   │   │   ├── enrichment_service.py     # Product database enrichment
+│   │   │   └── form_generation_service.py # Excel form generation
+│   │   ├── schemas/
+│   │   │   ├── order_schemas.py    # Order Pydantic models
+│   │   │   ├── product_schemas.py  # Product Pydantic models
+│   │   │   └── email_schemas.py    # Email Pydantic models
 │   │   ├── core/
 │   │   │   ├── auth.py           # Authentication logic
 │   │   │   ├── models.py         # SQLAlchemy models
 │   │   │   └── database.py       # Database setup
 │   │   └── migrations/           # Alembic migrations
+│   └── scripts/
+│       ├── gmail_oauth_setup.py  # Gmail OAuth credential setup
+│       └── seed_products.py      # Seed product database
 ├── frontend/
 │   ├── src/
+│   │   ├── components/
+│   │   │   ├── ui/               # shadcn/ui components
+│   │   │   ├── orders/           # Order automation components
+│   │   │   └── Layout/           # App layout components
 │   │   ├── contexts/
 │   │   │   ├── SimpleAuthContext.tsx  # JWT auth context
 │   │   │   └── AuthContext.tsx        # Kratos auth context
 │   │   ├── hooks/
-│   │   │   └── useUnifiedAuth.tsx     # Unified auth hook
+│   │   │   ├── useUnifiedAuth.tsx     # Unified auth hook
+│   │   │   └── useOrders.ts           # Order data hooks
+│   │   ├── services/
+│   │   │   ├── kratosService.ts       # Kratos API client
+│   │   │   └── orderService.ts        # Order API client
+│   │   ├── types/
+│   │   │   └── orders.ts              # Order TypeScript interfaces
 │   │   ├── routes/                    # Page components
 │   │   └── utils/
 │   │       └── apiClient.ts           # API client
@@ -256,60 +292,61 @@ micro_two/
 ├── start-dev.sh                 # Quick start for development
 ├── start-prod.sh                # Quick start for production
 ├── .env                         # Environment variables
-├── .gitignore                   # Git ignore patterns
 └── docs/                        # Documentation
 ```
 
-## 📊 Data Flow
+## Data Flow
 
-1. **Authentication**: User logs in (JWT in dev, Kratos in prod)
-2. **Upload**: Inspector uploads defect photos
-3. **Categorize**: Assign to building/room/component
-4. **AI Analysis**: OpenAI analyzes defect severity
-5. **Report**: Generate inspection reports
-6. **Track**: Monitor defect resolution status
+1. **Email Arrival**: Customer PO email arrives in Gmail catchment inbox
+2. **Polling**: Gmail service polls for new unprocessed emails
+3. **Extraction**: Anthropic Claude extracts structured order data (customer, PO#, line items, quantities)
+4. **Enrichment**: Product database lookup adds manufacturing specs, materials, packaging info
+5. **Form Generation**: Office Order and Works Order Excel forms are auto-generated
+6. **Review**: Sharon reviews extracted data and generated forms on the dashboard
+7. **Approval**: Approved orders produce downloadable .xlsx files; rejected orders are flagged with a reason
 
-## 🔐 Security
+## Security
 
-- **Dual Authentication**: 
+- **Dual Authentication**:
   - Development: Simple JWT with bcrypt passwords
   - Production: Ory Kratos with session management
 - **Password Security**: Bcrypt hashing with salt
 - **Token Management**: JWT with 7-day expiry (dev)
 - **Session Security**: HTTP-only cookies (prod)
-- **Role-Based Access**: Inspector, Admin, Viewer roles
 - **CORS**: Configured for frontend origin
 
-## 📝 API Documentation
+## API Documentation
 
 ### Key Endpoints
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| POST | `/auth/register` | Create account (dev) | ❌ |
-| POST | `/auth/login` | Login (dev) | ❌ |
-| GET | `/auth/me` | Current user info | ✅ |
-| POST | `/auth/logout` | Logout | ✅ |
-| GET | `/api/buildings` | List buildings | ✅ |
-| POST | `/api/defects` | Create defect | ✅ |
-| GET | `/api/admin/users` | List all users | Admin |
+| POST | `/auth/register` | Create account (dev) | No |
+| POST | `/auth/login` | Login (dev) | No |
+| GET | `/auth/me` | Current user info | Yes |
+| POST | `/auth/logout` | Logout | Yes |
+| GET | `/api/orders/` | List orders | Yes |
+| POST | `/api/orders/process-pending` | Process new emails | Yes |
+| GET | `/api/orders/{id}` | Get order details | Yes |
+| POST | `/api/orders/{id}/approve` | Approve order | Yes |
+| POST | `/api/orders/{id}/reject` | Reject order | Yes |
+| GET | `/api/products/` | List products | Yes |
+| GET | `/api/system/monitor-status` | Email monitor status | Yes |
 
 Full API documentation available at http://localhost:8006/docs
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Test authentication
-curl http://localhost:8006/api/me \
+curl http://localhost:8006/auth/me \
   -H "Authorization: Bearer $TOKEN"
 
-# Test file upload (use frontend)
-# 1. Login at http://localhost:5179
-# 2. Upload test-data.zip
-# 3. Check processing in logs
+# Run backend tests
+docker-compose exec backend pytest
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -343,23 +380,19 @@ lsof -i :9105
 - Check authentication service is running
 - Verify frontend includes token
 
-**403 No Tenant Assigned**
-- User needs tenant assignment
-- Check `/api/tenants/available`
-- Assign via API or admin panel
-
 **Database Connection Failed**
 - Verify PostgreSQL is running
 - Check credentials in .env
 - Ensure database exists
 
-## 📚 Documentation
+## Documentation
 
 - [Authentication & Multi-Tenancy](docs/AUTHENTICATION.md)
 - [Database Schema](docs/DATABASE_SETUP.md)
 - [Project Overview](docs/PROJECT_OVERVIEW.md)
+- [Feature Overview](docs/FEATURE_OVERVIEW.md)
 
-## 🚢 Production Deployment
+## Production Deployment
 
 ### Prerequisites
 - Configure SSL/HTTPS
@@ -372,12 +405,11 @@ lsof -i :9105
 ```bash
 DEBUG=false
 LOG_LEVEL=INFO
-# Add production URLs
-KEYCLOAK_URL=https://auth.yourdomain.com
 VITE_API_URL=https://api.yourdomain.com
+VITE_USE_SIMPLE_AUTH=false
 ```
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create feature branch (`git checkout -b feature/amazing`)
@@ -385,13 +417,13 @@ VITE_API_URL=https://api.yourdomain.com
 4. Push to branch (`git push origin feature/amazing`)
 5. Open Pull Request
 
-## 📄 License
+## License
 
 MIT License - see LICENSE file for details
 
-## 🆘 Support
+## Support
 
 For issues and questions:
-- Check [Troubleshooting](#-troubleshooting) section
+- Check [Troubleshooting](#troubleshooting) section
 - Review logs: `docker-compose logs`
 - Open GitHub issue with details

@@ -124,7 +124,7 @@ class TestOfficeOrderGeneration:
             ws = wb.active
 
             # Title rows
-            assert ws["A1"].value == "EEZY PEEZY PLASTICS"
+            assert ws["A1"].value == "RAMJET PLASTICS"
             assert ws["A2"].value == "OFFICE ORDER"
 
             # Customer / PO
@@ -267,7 +267,7 @@ class TestWorksOrderGeneration:
             ws = wb.active
 
             # Title
-            assert ws["A1"].value == "EEZY PEEZY PLASTICS"
+            assert ws["A1"].value == "RAMJET PLASTICS"
             assert ws["A2"].value == "WORKS ORDER"
             assert ws["A3"].value == "WO-PO-TEST-001-1"
 
@@ -590,7 +590,7 @@ class TestFormDownloadEndpoints:
 
             # Verify it's a valid xlsx
             wb = load_workbook(BytesIO(resp.content))
-            assert wb.active["A1"].value == "EEZY PEEZY PLASTICS"
+            assert wb.active["A1"].value == "RAMJET PLASTICS"
 
             _cleanup(db, [email.id])
         except Exception:

@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide covers the development workflow for the application.
+This guide covers the development workflow for the Ramjet application.
 
 ## Prerequisites
 
@@ -15,13 +15,14 @@ This guide covers the development workflow for the application.
 ### 1. Clone and Setup
 ```bash
 git clone <repository-url>
-cd micro_two
+cd ramjet
 
 # Copy environment template
 cp .env.example .env
 
 # Edit .env with your settings
 # Required: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, SECRET_KEY
+# For order automation: ANTHROPIC_API_KEY, GMAIL_DELEGATED_USER, GMAIL_CREDENTIALS_FILE
 ```
 
 ### 2. Start Docker Services
@@ -44,8 +45,8 @@ docker-compose logs -f frontend
 
 ### 3. Initialize Database (First Time Only)
 ```bash
-# Enable UUID extension
-docker-compose exec db psql -U postgres -d annie_defect -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+# Enable UUID extension (use your POSTGRES_DB value from .env)
+docker-compose exec db psql -U postgres -d ${POSTGRES_DB} -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
 
 # Create migrations directory
 docker-compose exec backend mkdir -p /app/migrations/versions
@@ -55,6 +56,9 @@ docker-compose exec backend alembic revision --autogenerate -m "Initial migratio
 
 # Run migrations
 docker-compose exec backend alembic upgrade head
+
+# Seed product database
+docker-compose exec backend python scripts/seed_products.py
 
 # Create Kratos database (ONLY if using production mode with Kratos)
 docker-compose exec db psql -U postgres -c "CREATE DATABASE kratos;"
@@ -106,7 +110,7 @@ Key commands:
 - `alembic revision -m "description"` - Create new migration
 - `alembic upgrade head` - Apply migrations
 - `alembic downgrade -1` - Rollback one migration
-- `pytest` - Run tests (when implemented)
+- `pytest` - Run tests
 
 ### Database Management
 
@@ -115,14 +119,14 @@ Key commands:
 2. Login with:
    - System: PostgreSQL
    - Server: db
-   - Username: postgres
-   - Password: postgres
-   - Database: app_database
+   - Username: (from .env: POSTGRES_USER)
+   - Password: (from .env: POSTGRES_PASSWORD)
+   - Database: (from .env: POSTGRES_DB)
 
 #### Using psql (CLI)
 ```bash
-# Connect to database
-docker exec -it app_postgres psql -U postgres -d app_database
+# Connect to database (use your POSTGRES_DB value from .env)
+docker exec -it eezy_peezy_postgres psql -U postgres -d ${POSTGRES_DB}
 
 # Common commands
 \dt              # List tables
@@ -234,8 +238,8 @@ app.include_router(my_feature.router)
 import { apiClient } from '@/utils/apiClient';
 
 const response = await apiClient.get('/api/v1/my-feature');
-const data = await apiClient.post('/api/v1/my-feature', { 
-  name: 'New Item' 
+const data = await apiClient.post('/api/v1/my-feature', {
+  name: 'New Item'
 });
 ```
 
@@ -246,8 +250,9 @@ const data = await apiClient.post('/api/v1/my-feature', {
 - [ ] Login/logout functionality
 - [ ] Protected route access
 - [ ] API authentication
-- [ ] Form validation
-- [ ] Error handling
+- [ ] Order processing pipeline
+- [ ] Form generation and preview
+- [ ] Order approval/rejection
 - [ ] Dark mode toggle
 
 ### API Testing with Swagger
@@ -261,11 +266,11 @@ const data = await apiClient.post('/api/v1/my-feature', {
 -- Check users
 SELECT * FROM users;
 
--- Check user with specific email
-SELECT * FROM users WHERE email = 'test@example.com';
+-- Check orders
+SELECT * FROM orders;
 
--- Count users by role
-SELECT role, COUNT(*) FROM users GROUP BY role;
+-- Check products
+SELECT * FROM products;
 ```
 
 ## Common Development Tasks
@@ -323,8 +328,10 @@ docker-compose up -d <service-name>
 
 ### Development Defaults
 ```env
-# Database
-DATABASE_URL=postgresql://postgres:postgres@db:5432/app_database
+# Database (values from .env)
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=your_database_name
 
 # Auth
 JWT_SECRET_KEY=dev-secret-key-change-in-production
@@ -334,6 +341,13 @@ JWT_EXPIRATION_DAYS=7
 # Frontend
 VITE_API_URL=http://localhost:8006
 VITE_USE_SIMPLE_AUTH=true
+
+# AI Services
+ANTHROPIC_API_KEY=sk-ant-xxxxx
+
+# Gmail
+GMAIL_DELEGATED_USER=catchment@ramjetplastics.com
+GMAIL_CREDENTIALS_FILE=client_secret.json
 
 # Kratos (if using)
 KRATOS_PUBLIC_URL=http://kratos:4433
@@ -425,7 +439,6 @@ Recommended extensions:
 - Tailwind CSS IntelliSense
 - Docker
 - Thunder Client (API testing)
-- Prisma (for database viewing)
 
 ## Performance Tips
 
@@ -437,7 +450,6 @@ Recommended extensions:
 
 ### Backend
 - Add database indexes for frequent queries
-- Use Redis for caching
 - Implement pagination for large datasets
 - Optimize N+1 queries with joins
 

@@ -76,7 +76,7 @@ def generate_office_order(db: Session, order: Order) -> bytes:
     # Row 1 — Company title
     ws.merge_cells("A1:G1")
     cell = ws["A1"]
-    cell.value = "EEZY PEEZY PLASTICS"
+    cell.value = "RAMJET PLASTICS"
     cell.font = _TITLE_FONT
     cell.alignment = Alignment(horizontal="center")
 
@@ -153,26 +153,67 @@ def generate_office_order(db: Session, order: Order) -> bytes:
             order_total += item.line_total
         row += 1
 
-    # Order Total row
+    # Subtotal row
     row += 1
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
-    c = ws.cell(row=row, column=1, value="Order Total")
+    c = ws.cell(row=row, column=1, value="Subtotal")
     c.font = _LABEL_FONT
     c.fill = _TOTAL_FILL
     c.alignment = Alignment(horizontal="right")
     c.border = _THIN_BORDER
-    # Fill border on merged area
     for col_idx in range(2, 7):
         mc = ws.cell(row=row, column=col_idx)
         mc.fill = _TOTAL_FILL
         mc.border = _THIN_BORDER
 
-    total_cell = ws.cell(row=row, column=7, value=_to_float(order_total))
-    total_cell.font = _LABEL_FONT
-    total_cell.fill = _TOTAL_FILL
-    total_cell.border = _THIN_BORDER
-    total_cell.number_format = '#,##0.00'
-    total_cell.alignment = Alignment(horizontal="right")
+    subtotal_cell = ws.cell(row=row, column=7, value=_to_float(order_total))
+    subtotal_cell.font = _LABEL_FONT
+    subtotal_cell.fill = _TOTAL_FILL
+    subtotal_cell.border = _THIN_BORDER
+    subtotal_cell.number_format = '#,##0.00'
+    subtotal_cell.alignment = Alignment(horizontal="right")
+
+    # GST row
+    gst_amount = order_total * Decimal("0.10")
+    row += 1
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
+    c = ws.cell(row=row, column=1, value="GST (10%)")
+    c.font = _LABEL_FONT
+    c.fill = _TOTAL_FILL
+    c.alignment = Alignment(horizontal="right")
+    c.border = _THIN_BORDER
+    for col_idx in range(2, 7):
+        mc = ws.cell(row=row, column=col_idx)
+        mc.fill = _TOTAL_FILL
+        mc.border = _THIN_BORDER
+
+    gst_cell = ws.cell(row=row, column=7, value=_to_float(gst_amount))
+    gst_cell.font = _LABEL_FONT
+    gst_cell.fill = _TOTAL_FILL
+    gst_cell.border = _THIN_BORDER
+    gst_cell.number_format = '#,##0.00'
+    gst_cell.alignment = Alignment(horizontal="right")
+
+    # Total (inc. GST) row
+    grand_total = order_total + gst_amount
+    row += 1
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
+    c = ws.cell(row=row, column=1, value="Total (inc. GST)")
+    c.font = Font(name="Calibri", size=10, bold=True)
+    c.fill = _TOTAL_FILL
+    c.alignment = Alignment(horizontal="right")
+    c.border = _THIN_BORDER
+    for col_idx in range(2, 7):
+        mc = ws.cell(row=row, column=col_idx)
+        mc.fill = _TOTAL_FILL
+        mc.border = _THIN_BORDER
+
+    grand_cell = ws.cell(row=row, column=7, value=_to_float(grand_total))
+    grand_cell.font = Font(name="Calibri", size=10, bold=True)
+    grand_cell.fill = _TOTAL_FILL
+    grand_cell.border = _THIN_BORDER
+    grand_cell.number_format = '#,##0.00'
+    grand_cell.alignment = Alignment(horizontal="right")
 
     # Special Instructions
     if order.special_instructions:
@@ -269,7 +310,7 @@ def generate_works_order(db: Session, order: Order, line_item: OrderLineItem) ->
     # Title rows
     ws.merge_cells("A1:F1")
     c = ws["A1"]
-    c.value = "EEZY PEEZY PLASTICS"
+    c.value = "RAMJET PLASTICS"
     c.font = _TITLE_FONT
     c.alignment = Alignment(horizontal="center")
 

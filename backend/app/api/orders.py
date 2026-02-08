@@ -14,8 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
-from app.core.models import Order, OrderLineItem, IncomingEmail, EmailAttachment
+from app.core.database import get_db, SessionLocal
+from app.core.models import Order, OrderLineItem, IncomingEmail, EmailAttachment, SystemSettings
 from app.schemas.order_schemas import (
     ApproveResponse,
     LineItemUpdateRequest,
@@ -33,6 +33,7 @@ from app.services.extraction_service import (
     process_single_email,
 )
 from app.services.form_generation_service import generate_all_forms
+from app.services.gmail_sender_service import gmail_sender
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +180,48 @@ async def approve_order(order_id: UUID, db: Session = Depends(get_db)):
     # Update status
     order.status = "approved"
     order.approved_at = datetime.now(timezone.utc)
+
+    # Capture notification data before commit (avoids expire_on_commit issues)
+    notification_data = {
+        "order_id": str(order.id),
+        "customer_name": order.customer_name or "Unknown",
+        "po_number": order.po_number or "N/A",
+        "delivery_date": str(order.delivery_date) if order.delivery_date else "N/A",
+        "special_instructions": order.special_instructions or "",
+        "line_items": [
+            {
+                "line_number": li.line_number,
+                "product_code": li.product_code or li.matched_product_code or "",
+                "product_description": li.product_description or "",
+                "colour": li.colour or "",
+                "quantity": li.quantity,
+            }
+            for li in order.line_items
+        ],
+        "attachments": [],
+    }
+    # Collect file bytes while session is still active
+    if order.office_order_file:
+        notification_data["attachments"].append({
+            "filename": f"Office_Order_{order.po_number or order.id}.xlsx",
+            "data": bytes(order.office_order_file),
+        })
+    for li in order.line_items:
+        if li.works_order_file:
+            notification_data["attachments"].append({
+                "filename": f"Works_Order_WO-{order.po_number or order.id}-{li.line_number}.xlsx",
+                "data": bytes(li.works_order_file),
+            })
+
     db.commit()
+
+    # Fire-and-forget email notification
+    email_notification_queued = False
+    try:
+        asyncio.create_task(_send_approval_notification(notification_data))
+        email_notification_queued = True
+    except Exception as e:
+        logger.warning(f"Failed to queue approval notification: {e}")
 
     return ApproveResponse(
         order_id=order.id,
@@ -187,7 +229,102 @@ async def approve_order(order_id: UUID, db: Session = Depends(get_db)):
         message="Order approved and forms generated",
         office_order_generated=order.office_order_file is not None,
         works_orders_generated=len([li for li in order.line_items if li.works_order_file is not None]),
+        email_notification_queued=email_notification_queued,
     )
+
+
+async def _send_approval_notification(data: dict) -> None:
+    """Send approval notification email. Failures are logged, never raised."""
+    try:
+        # Query notification emails from a fresh session
+        db = SessionLocal()
+        try:
+            setting = db.query(SystemSettings).filter(
+                SystemSettings.key == "notification_emails"
+            ).first()
+            raw = setting.value if setting else ""
+        finally:
+            db.close()
+
+        recipients = [e.strip() for e in raw.split(",") if e.strip()] if raw else []
+        if not recipients:
+            logger.info("No notification emails configured — skipping approval email")
+            return
+
+        subject = f"Order Approved: {data['customer_name']} - PO {data['po_number']}"
+
+        # Plain text body
+        lines = [
+            f"Order {data['order_id']} has been approved.",
+            f"",
+            f"Customer: {data['customer_name']}",
+            f"PO Number: {data['po_number']}",
+            f"Delivery Date: {data['delivery_date']}",
+        ]
+        if data["special_instructions"]:
+            lines.append(f"Special Instructions: {data['special_instructions']}")
+        lines.append("")
+        lines.append("Line Items:")
+        for li in data["line_items"]:
+            lines.append(
+                f"  {li['line_number']}. {li['product_code']} - "
+                f"{li['product_description']} ({li['colour']}) x {li['quantity']}"
+            )
+        body_text = "\n".join(lines)
+
+        # HTML body
+        rows_html = ""
+        for li in data["line_items"]:
+            rows_html += (
+                f"<tr>"
+                f"<td style='padding:4px 8px;border:1px solid #ddd'>{li['line_number']}</td>"
+                f"<td style='padding:4px 8px;border:1px solid #ddd'>{li['product_code']}</td>"
+                f"<td style='padding:4px 8px;border:1px solid #ddd'>{li['product_description']}</td>"
+                f"<td style='padding:4px 8px;border:1px solid #ddd'>{li['colour']}</td>"
+                f"<td style='padding:4px 8px;border:1px solid #ddd;text-align:right'>{li['quantity']}</td>"
+                f"</tr>"
+            )
+
+        body_html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:600px">
+            <h2 style="color:#2563eb">Order Approved</h2>
+            <table style="border-collapse:collapse;margin:12px 0">
+                <tr><td><strong>Customer:</strong></td><td>{data['customer_name']}</td></tr>
+                <tr><td><strong>PO Number:</strong></td><td>{data['po_number']}</td></tr>
+                <tr><td><strong>Delivery Date:</strong></td><td>{data['delivery_date']}</td></tr>
+            </table>
+            {f"<p><strong>Special Instructions:</strong> {data['special_instructions']}</p>" if data['special_instructions'] else ""}
+            <h3>Line Items</h3>
+            <table style="border-collapse:collapse;width:100%">
+                <thead>
+                    <tr style="background:#f3f4f6">
+                        <th style="padding:4px 8px;border:1px solid #ddd;text-align:left">#</th>
+                        <th style="padding:4px 8px;border:1px solid #ddd;text-align:left">Product</th>
+                        <th style="padding:4px 8px;border:1px solid #ddd;text-align:left">Description</th>
+                        <th style="padding:4px 8px;border:1px solid #ddd;text-align:left">Colour</th>
+                        <th style="padding:4px 8px;border:1px solid #ddd;text-align:right">Qty</th>
+                    </tr>
+                </thead>
+                <tbody>{rows_html}</tbody>
+            </table>
+            <p style="color:#6b7280;font-size:12px;margin-top:16px">
+                Attached: Office Order and Works Order spreadsheets.<br>
+                Sent automatically by Ramjet Plastics order system.
+            </p>
+        </div>
+        """
+
+        await gmail_sender.send(
+            to_addresses=recipients,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+            attachments=data["attachments"],
+        )
+        logger.info(f"Approval notification sent to {recipients} for order {data['order_id']}")
+
+    except Exception as e:
+        logger.error(f"Failed to send approval notification for order {data.get('order_id')}: {e}")
 
 
 @router.post("/{order_id}/reject", response_model=RejectResponse)
@@ -205,6 +342,28 @@ def reject_order(order_id: UUID, body: RejectRequest, db: Session = Depends(get_
         status=order.status,
         message="Order rejected",
     )
+
+
+# ── Delete ───────────────────────────────────────────────────────────
+
+@router.delete("/{order_id}", status_code=200)
+def delete_order(order_id: UUID, db: Session = Depends(get_db)):
+    """Permanently delete an order, its line items, and unlink the source email."""
+    order = _get_order_or_404(db, order_id)
+
+    # Mark source email as unprocessed so it can be re-extracted if needed
+    if order.email_id:
+        email = db.query(IncomingEmail).filter(IncomingEmail.id == order.email_id).first()
+        if email:
+            email.processed = False
+
+    # Line items cascade-delete via FK, but clear explicitly for clarity
+    db.query(OrderLineItem).filter(OrderLineItem.order_id == order.id).delete()
+    db.delete(order)
+    db.commit()
+
+    logger.info(f"Order {order_id} deleted permanently")
+    return {"message": f"Order {order_id} deleted"}
 
 
 # ── Form downloads ────────────────────────────────────────────────────

@@ -148,6 +148,8 @@ Routes are defined in `src/routes/` using TanStack Router:
 ### Protected Routes
 - `/` - Dashboard (redirects to login if not authenticated)
 - `/dashboard` - Main dashboard
+- `/orders` - Orders dashboard (filterable table, email monitor status)
+- `/orders/{orderId}` - Order review page (source panel, extracted data, form preview)
 - `/settings` - User settings with tabs
 - `/logout` - Logout handler
 
@@ -163,6 +165,14 @@ frontend/
 ├── src/
 │   ├── components/
 │   │   ├── ui/          # shadcn/ui components
+│   │   ├── orders/      # Order automation components
+│   │   │   ├── ConfidenceBadge.tsx
+│   │   │   ├── StatusBadge.tsx
+│   │   │   ├── OrderSourcePanel.tsx
+│   │   │   ├── OrderDataForm.tsx
+│   │   │   ├── FormPreview.tsx
+│   │   │   ├── OrderActions.tsx
+│   │   │   └── RejectDialog.tsx
 │   │   ├── Layout/      # App layout components
 │   │   ├── AuthGuard.tsx
 │   │   ├── KratosFlow.tsx
@@ -173,14 +183,21 @@ frontend/
 │   ├── hooks/           # Custom React hooks
 │   │   ├── useAuth.tsx
 │   │   ├── useKratos.tsx
-│   │   └── useUnifiedAuth.tsx
+│   │   ├── useUnifiedAuth.tsx
+│   │   └── useOrders.ts         # Order data hooks (TanStack Query)
 │   ├── routes/          # Route components
 │   │   ├── auth/        # Auth flow routes
+│   │   ├── orders/
+│   │   │   ├── index.tsx        # Orders dashboard
+│   │   │   └── $orderId.tsx     # Order review page
 │   │   ├── dashboard.tsx
 │   │   ├── index.tsx
 │   │   └── settings.tsx
 │   ├── services/        # API services
-│   │   └── kratosService.ts
+│   │   ├── kratosService.ts
+│   │   └── orderService.ts      # Order API client
+│   ├── types/           # TypeScript interfaces
+│   │   └── orders.ts            # Order type definitions
 │   ├── lib/            # Utilities
 │   │   └── utils.ts
 │   ├── main.tsx        # App entry point

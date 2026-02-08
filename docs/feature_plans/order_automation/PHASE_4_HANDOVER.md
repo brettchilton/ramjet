@@ -42,7 +42,7 @@ No new migrations or dependencies. The `office_order_file` (LargeBinary) column 
 | Build Excel from scratch (not from templates) | Legacy `.xls` templates can't be used with openpyxl; building from scratch gives full control over formatting |
 | Forms generated on approve | Forms are generated during the approve action via `run_in_executor` to avoid blocking the event loop |
 | Works orders use enrichment service | Pulls full product specs and calculates material/packaging requirements for matched products; sections left blank for unmatched products |
-| Australian date format (dd/mm/YYYY) | Matches business convention for Eezy Peezy Plastics |
+| Australian date format (dd/mm/YYYY) | Matches business convention for Ramjet Plastics |
 | Decimal → float conversion | openpyxl doesn't handle Python `Decimal` objects; all numeric values converted via `_to_float()` |
 | WO# format: `WO-{po_number}-{line_number}` | Links works orders back to the source PO for traceability |
 
@@ -72,7 +72,7 @@ No new migrations or dependencies. The `office_order_file` (LargeBinary) column 
 ## Office Order Layout
 
 7 columns (A-G):
-- Row 1-2: Company title ("EEZY PEEZY PLASTICS") + form title ("OFFICE ORDER")
+- Row 1-2: Company title ("RAMJET PLASTICS") + form title ("OFFICE ORDER")
 - Row 4-5: Customer/PO#/dates in label-value pairs
 - Row 7: Table headers (Line, Product Code, Description, Colour, Qty, Unit Price, Line Total)
 - Row 8+: Line items with alternating blue row fills

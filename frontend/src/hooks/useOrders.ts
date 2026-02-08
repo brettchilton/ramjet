@@ -7,6 +7,7 @@ import {
   rejectOrder,
   updateOrder,
   updateLineItem,
+  deleteOrder,
 } from '@/services/orderService';
 import type { OrderUpdateData, LineItemUpdateData } from '@/types/orders';
 
@@ -25,6 +26,7 @@ export function useOrder(id: string) {
     queryKey: ['order', id],
     queryFn: () => fetchOrder(id),
     enabled: !!id,
+    staleTime: 30_000,
   });
 }
 
@@ -68,6 +70,16 @@ export function useUpdateOrder() {
       updateOrder(id, data),
     onSuccess: (_data, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['order', id] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+}
+
+export function useDeleteOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteOrder(id),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
   });

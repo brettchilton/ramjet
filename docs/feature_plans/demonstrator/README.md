@@ -1,3 +1,5 @@
+> **Note:** This is a pre-implementation planning document. The actual implementation uses PostgreSQL, FastAPI, and React. See `docs/feature_plans/order_automation/` for implementation docs.
+
 # Ramjet Plastics - Order Automation System
 
 Automated order processing system for Ramjet Plastics. Monitors email, extracts customer orders using AI, auto-generates Office Orders and Works Orders, and presents them to Sharon for approval.

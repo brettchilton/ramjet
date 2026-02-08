@@ -208,6 +208,17 @@ class EmailMonitorStatus(Base):
     emails_processed_total = Column(Integer, default=0)
 
 
+# ── System Settings ──────────────────────────────────────────────────
+
+class SystemSettings(Base):
+    __tablename__ = "system_settings"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
+
 # ── Order Models ──────────────────────────────────────────────────────
 
 class Order(Base):

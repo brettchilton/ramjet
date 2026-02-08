@@ -1,3 +1,5 @@
+> **Note:** This is a pre-implementation planning document. The actual implementation uses PostgreSQL, FastAPI, and React. See `docs/feature_plans/order_automation/` for implementation docs.
+
 # ✅ DELIVERY COMPLETE - Ramjet Automation Project
 
 **Date:** February 7, 2026  

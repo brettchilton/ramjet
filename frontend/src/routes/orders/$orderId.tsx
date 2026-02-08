@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { AuthGuard } from '@/components/AuthGuard';
-import { useOrder, useUpdateOrder, useUpdateLineItem } from '@/hooks/useOrders';
+import { useOrder, useUpdateOrder, useUpdateLineItem, useDeleteOrder } from '@/hooks/useOrders';
 import { OrderSourcePanel } from '@/components/orders/OrderSourcePanel';
 import { OrderDataForm } from '@/components/orders/OrderDataForm';
 import { FormPreview } from '@/components/orders/FormPreview';
@@ -11,7 +11,15 @@ import { ConfidenceBadge } from '@/components/orders/ConfidenceBadge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import type { LineItemUpdateData } from '@/types/orders';
 
 export const Route = createFileRoute('/orders/$orderId')({
@@ -32,7 +40,9 @@ function OrderReviewContent() {
   const { data: order, isLoading } = useOrder(orderId);
   const updateOrderMutation = useUpdateOrder();
   const updateLineItemMutation = useUpdateLineItem();
+  const deleteMutation = useDeleteOrder();
   const [isEditing, setIsEditing] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -154,7 +164,46 @@ function OrderReviewContent() {
           <StatusBadge status={order.status} />
           <ConfidenceBadge confidence={order.extraction_confidence} />
         </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground hover:text-destructive"
+          onClick={() => setDeleteOpen(true)}
+        >
+          <Trash2 className="h-5 w-5" />
+          <span className="sr-only">Delete order</span>
+        </Button>
       </div>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Order</DialogTitle>
+            <DialogDescription>
+              This will permanently delete the order, all line items, and any
+              generated forms. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() =>
+                deleteMutation.mutate(order.id, {
+                  onSuccess: () => navigate({ to: '/orders' }),
+                })
+              }
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete Order'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Two-column panel: Source (left) + Extracted data (right) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
