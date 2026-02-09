@@ -34,7 +34,9 @@ class ExtractionError(Exception):
 
 # ── System prompt for Claude ─────────────────────────────────────────
 
-EXTRACTION_SYSTEM_PROMPT = """You are an order extraction assistant for a plastics manufacturing company.
+EXTRACTION_SYSTEM_PROMPT = """You are an order extraction assistant for Ramjet Plastics, a plastics manufacturing company.
+
+IMPORTANT: Ramjet Plastics is the SELLER/MANUFACTURER. The customer is the company or person PLACING the order (i.e. the sender of the email). Never set customer_name to "Ramjet Plastics" — that is us. The customer_name should be the buying company or person, which can typically be identified from the email sender, the "Bill To" / "Ship To" fields, or the company placing the purchase order.
 
 Your job is to extract structured purchase order data from emails and their attachments (PDFs, Excel files, images).
 
@@ -270,11 +272,20 @@ def _parse_extraction_json(text: str) -> dict:
 
 # ── Order creation ────────────────────────────────────────────────────
 
-def create_order_from_extraction(db: Session, email: IncomingEmail, extraction: dict) -> Order:
+def create_order_from_extraction(db: Session, email: IncomingEmail, extraction: dict) -> Optional[Order]:
     """
     Create Order + OrderLineItem records from extraction data.
     Matches product codes against the catalog and flags items needing review.
+    Returns None if an order already exists for this email (duplicate guard).
     """
+    # Guard against duplicate orders for the same email
+    existing = db.query(Order).filter(Order.email_id == email.id).first()
+    if existing:
+        logger.warning(f"Order {existing.id} already exists for email {email.id} — skipping duplicate")
+        email.processed = True
+        db.commit()
+        return existing
+
     # Check for extraction error
     if "error" in extraction:
         order = Order(
@@ -444,6 +455,13 @@ def process_single_email(db: Session, email: IncomingEmail) -> Optional[Order]:
     Full pipeline for one email: extract → match → create order.
     Returns the created Order, or None on failure.
     """
+    # Skip if already processed (race condition guard)
+    if email.processed:
+        existing = db.query(Order).filter(Order.email_id == email.id).first()
+        if existing:
+            logger.info(f"Email {email.id} already processed — order {existing.id} exists")
+            return existing
+
     try:
         logger.info(f"Processing email {email.id}: '{email.subject}'")
         extraction = extract_order_from_email(email)
@@ -462,6 +480,11 @@ def process_single_email(db: Session, email: IncomingEmail) -> Optional[Order]:
 
 def _create_error_order(db: Session, email: IncomingEmail, error_msg: str) -> Order:
     """Create an error-status order for visibility when extraction fails."""
+    existing = db.query(Order).filter(Order.email_id == email.id).first()
+    if existing:
+        logger.warning(f"Order {existing.id} already exists for email {email.id} — skipping error order")
+        return existing
+
     order = Order(
         email_id=email.id,
         status="error",

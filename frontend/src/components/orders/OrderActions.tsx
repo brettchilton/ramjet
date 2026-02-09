@@ -15,7 +15,7 @@ import type { OrderDetail } from '@/types/orders';
 interface OrderActionsProps {
   order: OrderDetail;
   isEditing: boolean;
-  onToggleEdit: () => void;
+  onToggleEdit: (e?: React.MouseEvent) => void;
 }
 
 export function OrderActions({ order, isEditing, onToggleEdit }: OrderActionsProps) {
@@ -73,6 +73,7 @@ export function OrderActions({ order, isEditing, onToggleEdit }: OrderActionsPro
       <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 rounded-lg border bg-white/95 dark:bg-gray-950/95 backdrop-blur p-4">
         <Button
           variant="destructive"
+          type="button"
           onClick={() => setRejectOpen(true)}
         >
           <XCircle className="mr-1.5 h-4 w-4" />
@@ -80,12 +81,26 @@ export function OrderActions({ order, isEditing, onToggleEdit }: OrderActionsPro
         </Button>
 
         {isEditing ? (
-          <Button type="submit" form="order-data-form" variant="outline">
+          <Button
+            key="save-btn"
+            type="submit"
+            form="order-data-form"
+            variant="outline"
+          >
             <Save className="mr-1.5 h-4 w-4" />
             Save Changes
           </Button>
         ) : (
-          <Button variant="outline" onClick={onToggleEdit}>
+          <Button
+            key="edit-btn"
+            variant="outline"
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleEdit(e);
+            }}
+          >
             <Pencil className="mr-1.5 h-4 w-4" />
             Edit
           </Button>

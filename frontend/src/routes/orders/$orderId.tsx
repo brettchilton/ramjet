@@ -41,10 +41,27 @@ function OrderReviewContent() {
   const updateOrderMutation = useUpdateOrder();
   const updateLineItemMutation = useUpdateLineItem();
   const deleteMutation = useDeleteOrder();
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, _setIsEditing] = useState(false);
+
+  // Trace state updates
+  const setIsEditing = (newVal: boolean | ((prev: boolean) => boolean)) => {
+    console.log('[OrderReviewContent] setIsEditing called with:', newVal);
+    console.trace('[OrderReviewContent] Trace for setIsEditing');
+    _setIsEditing(newVal);
+  };
+
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  if (isLoading) {
+
+
+  // DEBUG LOGS (Re-added)
+
+
+
+
+  // FIX: Only show skeleton if we have NO data.  
+  // If we have data but are refetching (swr), we should keep showing the UI.
+  if (isLoading && !order) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />

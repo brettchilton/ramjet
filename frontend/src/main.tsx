@@ -12,7 +12,7 @@ import { ColorModeContext } from './ColorModeContext';
 const queryClient = new QueryClient();
 
 // Create a TanStack Router instance
-const router = createRouter({ 
+const router = createRouter({
   routeTree,
   defaultNotFoundComponent: () => {
     console.log('Not found component rendering');
@@ -36,18 +36,22 @@ declare module '@tanstack/react-router' {
   }
 }
 
+// Use simple auth in development, Kratos in production
+const useSimpleAuth = import.meta.env.VITE_USE_SIMPLE_AUTH === 'true' || import.meta.env.DEV;
+const AuthProviderComponent = useSimpleAuth ? SimpleAuthProvider : AuthProvider;
+
 function App() {
   // Initialize theme state
   const [mode, setMode] = useState<'light' | 'dark'>('light');
   const [isInitialized, setIsInitialized] = useState(false);
-  
+
   // Initialize theme on mount
   useEffect(() => {
     const initializeTheme = () => {
       // Check localStorage first
       const stored = localStorage.getItem('theme');
       let initialMode: 'light' | 'dark';
-      
+
       if (stored === 'light' || stored === 'dark') {
         initialMode = stored;
       } else {
@@ -55,10 +59,10 @@ function App() {
         initialMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         localStorage.setItem('theme', initialMode);
       }
-      
+
       console.log('Initializing theme to:', initialMode);
       setMode(initialMode);
-      
+
       // Apply to HTML immediately
       const root = document.documentElement;
       if (initialMode === 'dark') {
@@ -66,22 +70,22 @@ function App() {
       } else {
         root.classList.remove('dark');
       }
-      
+
       setIsInitialized(true);
     };
-    
+
     initializeTheme();
   }, []);
-  
+
   const colorMode = useMemo(
-    () => ({ 
+    () => ({
       mode,
       toggleColorMode: () => {
         setMode((prev) => {
           const newMode = prev === 'light' ? 'dark' : 'light';
           console.log('Toggling theme from', prev, 'to', newMode);
           localStorage.setItem('theme', newMode);
-          
+
           // Apply to HTML immediately
           const root = document.documentElement;
           if (newMode === 'dark') {
@@ -89,22 +93,18 @@ function App() {
           } else {
             root.classList.remove('dark');
           }
-          
+
           return newMode;
         });
       }
     }),
     [mode]
   );
-  
+
   // Don't render until theme is initialized to prevent flash
   if (!isInitialized) {
     return <div>Loading...</div>;
   }
-
-  // Use simple auth in development, Kratos in production
-  const useSimpleAuth = import.meta.env.VITE_USE_SIMPLE_AUTH === 'true' || import.meta.env.DEV;
-  const AuthProviderComponent = useSimpleAuth ? SimpleAuthProvider : AuthProvider;
 
   return (
     <ColorModeContext.Provider value={colorMode}>

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,11 +69,28 @@ export function OrderDataForm({ order, isEditing, onSave }: OrderDataFormProps) 
   const watchedLineItems = watch('line_items');
 
   // Reset form when order data changes (skip while editing to prevent flash)
+  // Reset form when order data changes (skip while editing to prevent flash)
+  // Reset form when order data changes (skip while editing to prevent flash)
+  // Reset form when order data changes (skip while editing to prevent flash)
+  // Also perform a reset when entering edit mode to ensure fields are populated
+  const wasEditing = useRef(isEditing);
+
   useEffect(() => {
-    if (!isEditing) {
+    // If we just entered edit mode (false -> true)
+    const justEnteredEditMode = isEditing && !wasEditing.current;
+
+    // reset if:
+    // 1. We are NOT editing (sync with background updates)
+    // 2. We JUST entered edit mode (initialize fields provided they are not already dirty, 
+    //    but since we just entered, they shouldn't be dirty from user input yet).
+    if (!isEditing || justEnteredEditMode) {
       reset(getDefaults(order));
     }
+
+    wasEditing.current = isEditing;
   }, [order, reset, isEditing]);
+
+
 
   // Auto-calc line totals when qty or price changes
   useEffect(() => {

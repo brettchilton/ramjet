@@ -351,11 +351,12 @@ def delete_order(order_id: UUID, db: Session = Depends(get_db)):
     """Permanently delete an order, its line items, and unlink the source email."""
     order = _get_order_or_404(db, order_id)
 
-    # Mark source email as unprocessed so it can be re-extracted if needed
+    # Keep source email marked as processed so the poller doesn't re-extract it.
+    # Use the dedicated /reprocess endpoint to intentionally re-extract.
     if order.email_id:
         email = db.query(IncomingEmail).filter(IncomingEmail.id == order.email_id).first()
         if email:
-            email.processed = False
+            email.processed = True
 
     # Line items cascade-delete via FK, but clear explicitly for clarity
     db.query(OrderLineItem).filter(OrderLineItem.order_id == order.id).delete()
