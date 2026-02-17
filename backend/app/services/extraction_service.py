@@ -392,7 +392,7 @@ def create_order_from_extraction(db: Session, email: IncomingEmail, extraction: 
 
         line_total = None
         if unit_price is not None and quantity:
-            line_total = unit_price * quantity
+            line_total = (unit_price * quantity).quantize(Decimal("0.01"))
 
         # Calculate average item confidence
         item_confidences = [

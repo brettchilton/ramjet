@@ -150,7 +150,7 @@ def generate_office_order(db: Session, order: Order) -> bytes:
                 c.number_format = '#,##0.00'
 
         if item.line_total:
-            order_total += item.line_total
+            order_total += Decimal(str(item.line_total)).quantize(Decimal("0.01"))
         row += 1
 
     # Subtotal row
@@ -174,7 +174,7 @@ def generate_office_order(db: Session, order: Order) -> bytes:
     subtotal_cell.alignment = Alignment(horizontal="right")
 
     # GST row
-    gst_amount = order_total * Decimal("0.10")
+    gst_amount = (order_total * Decimal("0.10")).quantize(Decimal("0.01"))
     row += 1
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
     c = ws.cell(row=row, column=1, value="GST (10%)")
@@ -195,7 +195,7 @@ def generate_office_order(db: Session, order: Order) -> bytes:
     gst_cell.alignment = Alignment(horizontal="right")
 
     # Total (inc. GST) row
-    grand_total = order_total + gst_amount
+    grand_total = (order_total + gst_amount).quantize(Decimal("0.01"))
     row += 1
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
     c = ws.cell(row=row, column=1, value="Total (inc. GST)")
