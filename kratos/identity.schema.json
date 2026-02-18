@@ -51,8 +51,8 @@
         "role": {
           "type": "string",
           "title": "Role",
-          "enum": ["inspector", "admin", "viewer"],
-          "default": "inspector"
+          "enum": ["warehouse", "admin"],
+          "default": "warehouse"
         }
       },
       "required": [

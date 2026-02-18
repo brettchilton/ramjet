@@ -1,5 +1,5 @@
 """
-Products API — browse catalog, get full specs, calculate material requirements.
+Products API — browse catalog, get full specs, calculate material requirements, CRUD.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,6 +8,7 @@ from typing import Optional
 
 from app.core.database import get_db
 from app.core.models import Product
+from app.core.auth import require_role
 from app.schemas.product_schemas import (
     ProductListItem,
     ProductFullResponse,
@@ -19,6 +20,8 @@ from app.schemas.product_schemas import (
     MaterialRequirements,
     PackagingRequirements,
     ProductMatch,
+    ProductCreate,
+    ProductUpdate,
 )
 from app.services.enrichment_service import (
     get_product_full_specs,
@@ -96,3 +99,59 @@ def calculate(
         packaging_requirements=PackagingRequirements(**result["packaging_requirements"]),
         estimated_cost=result["estimated_cost"],
     )
+
+
+# ── CRUD endpoints (admin only) ──────────────────────────────────────
+
+@router.post("/", response_model=ProductListItem, dependencies=[Depends(require_role("admin"))])
+def create_product(
+    payload: ProductCreate,
+    db: Session = Depends(get_db),
+):
+    existing = db.query(Product).filter(Product.product_code == payload.product_code).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Product '{payload.product_code}' already exists")
+
+    product = Product(
+        product_code=payload.product_code,
+        product_description=payload.product_description,
+        customer_name=payload.customer_name,
+        is_stockable=payload.is_stockable,
+    )
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+    return product
+
+
+@router.put("/{product_code}", response_model=ProductListItem, dependencies=[Depends(require_role("admin"))])
+def update_product(
+    product_code: str,
+    payload: ProductUpdate,
+    db: Session = Depends(get_db),
+):
+    product = db.query(Product).filter(Product.product_code == product_code).first()
+    if not product:
+        raise HTTPException(status_code=404, detail=f"Product '{product_code}' not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(product, field, value)
+
+    db.commit()
+    db.refresh(product)
+    return product
+
+
+@router.delete("/{product_code}", dependencies=[Depends(require_role("admin"))])
+def delete_product(
+    product_code: str,
+    db: Session = Depends(get_db),
+):
+    product = db.query(Product).filter(Product.product_code == product_code).first()
+    if not product:
+        raise HTTPException(status_code=404, detail=f"Product '{product_code}' not found")
+
+    product.is_active = False
+    db.commit()
+    return {"message": f"Product '{product_code}' deactivated"}

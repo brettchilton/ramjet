@@ -22,7 +22,7 @@ class User(Base):
     kratos_identity_id = Column(String(255), unique=True)  # Kratos identity ID for production
     
     # Authorization
-    role = Column(String(50), default="inspector")  # inspector, admin, viewer
+    role = Column(String(50), default="warehouse")  # warehouse, admin
     is_active = Column(Boolean, default=True)
     
     # Timestamps
@@ -45,6 +45,7 @@ class Product(Base):
     product_description = Column(Text, nullable=False)
     customer_name = Column(String(255))
     is_active = Column(Boolean, default=True)
+    is_stockable = Column(Boolean, default=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -226,7 +227,7 @@ class Order(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4())
     email_id = Column(Integer, ForeignKey("incoming_emails.id"), nullable=True)
-    status = Column(String(20), nullable=False, default="pending")  # pending | approved | rejected | error
+    status = Column(String(30), nullable=False, default="pending")  # pending | approved | rejected | error | verified | works_order_generated
     customer_name = Column(String(255))
     po_number = Column(String(100))
     po_date = Column(Date)
@@ -246,6 +247,7 @@ class Order(Base):
     email = relationship("IncomingEmail", backref="orders")
     line_items = relationship("OrderLineItem", back_populates="order", cascade="all, delete-orphan")
     approver = relationship("User", foreign_keys=[approved_by])
+    stock_verifications = relationship("StockVerification", back_populates="order")
 
 
 Index('idx_orders_status', Order.status)
@@ -275,6 +277,221 @@ class OrderLineItem(Base):
     # Relationships
     order = relationship("Order", back_populates="line_items")
     matched_product = relationship("Product", foreign_keys=[matched_product_code])
+    stock_verifications = relationship("StockVerification", back_populates="order_line_item")
 
 
 Index('idx_order_line_items_order_id', OrderLineItem.order_id)
+
+
+# ── Stock Tracking Models ────────────────────────────────────────────
+
+class StockItem(Base):
+    __tablename__ = "stock_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4())
+    barcode_id = Column(String(100), unique=True, nullable=False)
+    product_code = Column(String(50), ForeignKey("products.product_code"), nullable=False)
+    colour = Column(String(100), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    box_type = Column(String(10), nullable=False)  # full | partial
+    status = Column(String(20), nullable=False, default="in_stock")  # in_stock | picked | scrapped | consumed
+    production_date = Column(Date)
+    scanned_in_at = Column(DateTime(timezone=True))
+    scanned_in_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    scanned_out_at = Column(DateTime(timezone=True), nullable=True)
+    scanned_out_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
+    parent_stock_item_id = Column(UUID(as_uuid=True), ForeignKey("stock_items.id"), nullable=True)
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    product = relationship("Product", foreign_keys=[product_code])
+    scanned_in_user = relationship("User", foreign_keys=[scanned_in_by])
+    scanned_out_user = relationship("User", foreign_keys=[scanned_out_by])
+    order = relationship("Order", foreign_keys=[order_id])
+    parent_stock_item = relationship("StockItem", remote_side="StockItem.id", foreign_keys=[parent_stock_item_id])
+    movements = relationship("StockMovement", back_populates="stock_item")
+
+
+Index('idx_stock_items_barcode', StockItem.barcode_id)
+Index('idx_stock_items_product', StockItem.product_code, StockItem.colour)
+Index('idx_stock_items_status', StockItem.status)
+Index('idx_stock_items_order', StockItem.order_id)
+
+
+class StockMovement(Base):
+    __tablename__ = "stock_movements"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4())
+    stock_item_id = Column(UUID(as_uuid=True), ForeignKey("stock_items.id"), nullable=False)
+    movement_type = Column(String(20), nullable=False)  # stock_in | stock_out | adjustment | stocktake_verified | partial_repack
+    quantity_change = Column(Integer, nullable=False)
+    reason = Column(Text, nullable=True)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
+    stocktake_session_id = Column(UUID(as_uuid=True), ForeignKey("stocktake_sessions.id"), nullable=True)
+    performed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    stock_item = relationship("StockItem", back_populates="movements")
+    order = relationship("Order", foreign_keys=[order_id])
+    stocktake_session = relationship("StocktakeSession", foreign_keys=[stocktake_session_id])
+    performer = relationship("User", foreign_keys=[performed_by])
+
+
+Index('idx_stock_movements_item', StockMovement.stock_item_id)
+Index('idx_stock_movements_type', StockMovement.movement_type)
+Index('idx_stock_movements_date', StockMovement.created_at)
+Index('idx_stock_movements_order', StockMovement.order_id)
+
+
+class StockThreshold(Base):
+    __tablename__ = "stock_thresholds"
+    __table_args__ = (
+        Index('uq_stock_threshold_product_colour', 'product_code', 'colour', unique=True),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4())
+    product_code = Column(String(50), ForeignKey("products.product_code"), nullable=False)
+    colour = Column(String(100), nullable=True)  # NULL = all colours for this product
+    red_threshold = Column(Integer, nullable=False, default=0)
+    amber_threshold = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    product = relationship("Product", foreign_keys=[product_code])
+
+
+class StockVerification(Base):
+    __tablename__ = "stock_verifications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4())
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False)
+    order_line_item_id = Column(UUID(as_uuid=True), ForeignKey("order_line_items.id"), nullable=False)
+    product_code = Column(String(50), ForeignKey("products.product_code"), nullable=False)
+    colour = Column(String(100), nullable=False)
+    system_stock_quantity = Column(Integer, nullable=False)
+    verified_quantity = Column(Integer, nullable=True)
+    status = Column(String(20), nullable=False, default="pending")  # pending | confirmed | expired
+    verified_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    order = relationship("Order", back_populates="stock_verifications")
+    order_line_item = relationship("OrderLineItem", back_populates="stock_verifications")
+    product = relationship("Product", foreign_keys=[product_code])
+    verifier = relationship("User", foreign_keys=[verified_by])
+
+
+Index('idx_stock_verifications_order', StockVerification.order_id)
+Index('idx_stock_verifications_status', StockVerification.status)
+Index('idx_stock_verifications_line_item', StockVerification.order_line_item_id)
+
+
+class StocktakeSession(Base):
+    __tablename__ = "stocktake_sessions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4())
+    name = Column(String(255))
+    status = Column(String(20), nullable=False, default="in_progress")  # in_progress | completed | cancelled
+    started_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    completed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    started_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    total_expected = Column(Integer, nullable=True)
+    total_scanned = Column(Integer, nullable=True)
+    total_discrepancies = Column(Integer, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    starter = relationship("User", foreign_keys=[started_by])
+    completer = relationship("User", foreign_keys=[completed_by])
+    scans = relationship("StocktakeScan", back_populates="session")
+
+
+class StocktakeScan(Base):
+    __tablename__ = "stocktake_scans"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4())
+    session_id = Column(UUID(as_uuid=True), ForeignKey("stocktake_sessions.id"), nullable=False)
+    barcode_scanned = Column(String(100), nullable=False)
+    stock_item_id = Column(UUID(as_uuid=True), ForeignKey("stock_items.id"), nullable=True)
+    scan_result = Column(String(20), nullable=False)  # found | not_in_system | already_scanned | wrong_status
+    scanned_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    scanned_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    notes = Column(Text, nullable=True)
+
+    # Relationships
+    session = relationship("StocktakeSession", back_populates="scans")
+    stock_item = relationship("StockItem", foreign_keys=[stock_item_id])
+    scanner = relationship("User", foreign_keys=[scanned_by])
+
+
+Index('idx_stocktake_scans_session', StocktakeScan.session_id)
+Index('idx_stocktake_scans_barcode', StocktakeScan.barcode_scanned)
+
+
+# ── Raw Material Models ──────────────────────────────────────────────
+
+class RawMaterial(Base):
+    __tablename__ = "raw_materials"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4())
+    material_code = Column(String(50), unique=True, nullable=False)
+    material_name = Column(String(255), nullable=False)
+    material_type = Column(String(50), nullable=False)  # resin | masterbatch | additive | packaging | other
+    unit_of_measure = Column(String(20), nullable=False)  # kg | litres | units | rolls
+    current_stock = Column(Numeric(12, 2), nullable=False, default=0)
+    red_threshold = Column(Numeric(12, 2), nullable=False, default=0)
+    amber_threshold = Column(Numeric(12, 2), nullable=False, default=0)
+    default_supplier = Column(String(255), nullable=True)
+    unit_cost = Column(Numeric(10, 2), nullable=True)
+    is_active = Column(Boolean, default=True)
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    movements = relationship("RawMaterialMovement", back_populates="raw_material")
+
+
+Index('idx_raw_materials_code', RawMaterial.material_code)
+Index('idx_raw_materials_type', RawMaterial.material_type)
+
+
+class RawMaterialMovement(Base):
+    __tablename__ = "raw_material_movements"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4())
+    raw_material_id = Column(UUID(as_uuid=True), ForeignKey("raw_materials.id"), nullable=False)
+    movement_type = Column(String(20), nullable=False)  # received | used | adjustment | stocktake
+    quantity = Column(Numeric(12, 2), nullable=False)
+    unit_cost = Column(Numeric(10, 2), nullable=True)
+    supplier = Column(String(255), nullable=True)
+    delivery_note = Column(String(255), nullable=True)
+    reason = Column(Text, nullable=True)
+    performed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    raw_material = relationship("RawMaterial", back_populates="movements")
+    performer = relationship("User", foreign_keys=[performed_by])
+
+
+Index('idx_raw_material_movements_material', RawMaterialMovement.raw_material_id)
+Index('idx_raw_material_movements_date', RawMaterialMovement.created_at)

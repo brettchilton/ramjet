@@ -21,6 +21,7 @@ logging.basicConfig(
 
 # Import routers
 from app.api import auth_simplified, auth_kratos, auth_simple, products, system, orders, settings, analytics
+from app.api import stock, stock_verification, raw_materials, stocktake, reports
 # from app.api import upload  # Temporarily disabled
 
 # Import authentication
@@ -59,6 +60,11 @@ app.include_router(system.router)
 app.include_router(orders.router)
 app.include_router(settings.router)
 app.include_router(analytics.router)
+app.include_router(stock.router)
+app.include_router(stock_verification.router)
+app.include_router(raw_materials.router)
+app.include_router(stocktake.router)
+app.include_router(reports.router)
 
 # Database connection details are pulled from environment variables.
 DB_HOST = os.environ.get('DB_HOST')

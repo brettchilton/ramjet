@@ -445,6 +445,20 @@ def create_order_from_extraction(db: Session, email: IncomingEmail, extraction: 
     db.commit()
     db.refresh(order)
 
+    # Auto-create stock verification tasks for line items with existing stock
+    if order.status == "pending":
+        try:
+            from app.services.stock_verification_service import create_verifications_for_order
+            verifications = create_verifications_for_order(order.id, db)
+            if verifications:
+                db.commit()
+                logger.info(
+                    "Created %d stock verifications for order %s",
+                    len(verifications), order.id,
+                )
+        except Exception as e:
+            logger.warning("Failed to create stock verifications for order %s: %s", order.id, e)
+
     return order
 
 

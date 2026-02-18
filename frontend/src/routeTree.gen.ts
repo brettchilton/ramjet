@@ -16,13 +16,23 @@ import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as StockIndexRouteImport } from './routes/stock/index'
+import { Route as RawMaterialsIndexRouteImport } from './routes/raw-materials/index'
+import { Route as ProductsIndexRouteImport } from './routes/products/index'
 import { Route as OrdersIndexRouteImport } from './routes/orders/index'
+import { Route as StockVerificationRouteImport } from './routes/stock/verification'
+import { Route as StockScanRouteImport } from './routes/stock/scan'
+import { Route as StockLabelsRouteImport } from './routes/stock/labels'
+import { Route as StockStockItemIdRouteImport } from './routes/stock/$stockItemId'
+import { Route as RawMaterialsMaterialIdRouteImport } from './routes/raw-materials/$materialId'
 import { Route as OrdersOrderIdRouteImport } from './routes/orders/$orderId'
 import { Route as AuthVerificationRouteImport } from './routes/auth/verification'
 import { Route as AuthRegistrationRouteImport } from './routes/auth/registration'
 import { Route as AuthRecoveryRouteImport } from './routes/auth/recovery'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthErrorRouteImport } from './routes/auth/error'
+import { Route as StockStocktakeIndexRouteImport } from './routes/stock/stocktake/index'
+import { Route as StockStocktakeSessionIdRouteImport } from './routes/stock/stocktake/$sessionId'
 
 const SimpleRegisterRoute = SimpleRegisterRouteImport.update({
   id: '/simple-register',
@@ -59,9 +69,49 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StockIndexRoute = StockIndexRouteImport.update({
+  id: '/stock/',
+  path: '/stock/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RawMaterialsIndexRoute = RawMaterialsIndexRouteImport.update({
+  id: '/raw-materials/',
+  path: '/raw-materials/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductsIndexRoute = ProductsIndexRouteImport.update({
+  id: '/products/',
+  path: '/products/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OrdersIndexRoute = OrdersIndexRouteImport.update({
   id: '/orders/',
   path: '/orders/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StockVerificationRoute = StockVerificationRouteImport.update({
+  id: '/stock/verification',
+  path: '/stock/verification',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StockScanRoute = StockScanRouteImport.update({
+  id: '/stock/scan',
+  path: '/stock/scan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StockLabelsRoute = StockLabelsRouteImport.update({
+  id: '/stock/labels',
+  path: '/stock/labels',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StockStockItemIdRoute = StockStockItemIdRouteImport.update({
+  id: '/stock/$stockItemId',
+  path: '/stock/$stockItemId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RawMaterialsMaterialIdRoute = RawMaterialsMaterialIdRouteImport.update({
+  id: '/raw-materials/$materialId',
+  path: '/raw-materials/$materialId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrdersOrderIdRoute = OrdersOrderIdRouteImport.update({
@@ -94,6 +144,16 @@ const AuthErrorRoute = AuthErrorRouteImport.update({
   path: '/auth/error',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StockStocktakeIndexRoute = StockStocktakeIndexRouteImport.update({
+  id: '/stock/stocktake/',
+  path: '/stock/stocktake/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StockStocktakeSessionIdRoute = StockStocktakeSessionIdRouteImport.update({
+  id: '/stock/stocktake/$sessionId',
+  path: '/stock/stocktake/$sessionId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -109,7 +169,17 @@ export interface FileRoutesByFullPath {
   '/auth/registration': typeof AuthRegistrationRoute
   '/auth/verification': typeof AuthVerificationRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/raw-materials/$materialId': typeof RawMaterialsMaterialIdRoute
+  '/stock/$stockItemId': typeof StockStockItemIdRoute
+  '/stock/labels': typeof StockLabelsRoute
+  '/stock/scan': typeof StockScanRoute
+  '/stock/verification': typeof StockVerificationRoute
   '/orders/': typeof OrdersIndexRoute
+  '/products/': typeof ProductsIndexRoute
+  '/raw-materials/': typeof RawMaterialsIndexRoute
+  '/stock/': typeof StockIndexRoute
+  '/stock/stocktake/$sessionId': typeof StockStocktakeSessionIdRoute
+  '/stock/stocktake/': typeof StockStocktakeIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -125,7 +195,17 @@ export interface FileRoutesByTo {
   '/auth/registration': typeof AuthRegistrationRoute
   '/auth/verification': typeof AuthVerificationRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/raw-materials/$materialId': typeof RawMaterialsMaterialIdRoute
+  '/stock/$stockItemId': typeof StockStockItemIdRoute
+  '/stock/labels': typeof StockLabelsRoute
+  '/stock/scan': typeof StockScanRoute
+  '/stock/verification': typeof StockVerificationRoute
   '/orders': typeof OrdersIndexRoute
+  '/products': typeof ProductsIndexRoute
+  '/raw-materials': typeof RawMaterialsIndexRoute
+  '/stock': typeof StockIndexRoute
+  '/stock/stocktake/$sessionId': typeof StockStocktakeSessionIdRoute
+  '/stock/stocktake': typeof StockStocktakeIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -142,7 +222,17 @@ export interface FileRoutesById {
   '/auth/registration': typeof AuthRegistrationRoute
   '/auth/verification': typeof AuthVerificationRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/raw-materials/$materialId': typeof RawMaterialsMaterialIdRoute
+  '/stock/$stockItemId': typeof StockStockItemIdRoute
+  '/stock/labels': typeof StockLabelsRoute
+  '/stock/scan': typeof StockScanRoute
+  '/stock/verification': typeof StockVerificationRoute
   '/orders/': typeof OrdersIndexRoute
+  '/products/': typeof ProductsIndexRoute
+  '/raw-materials/': typeof RawMaterialsIndexRoute
+  '/stock/': typeof StockIndexRoute
+  '/stock/stocktake/$sessionId': typeof StockStocktakeSessionIdRoute
+  '/stock/stocktake/': typeof StockStocktakeIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -160,7 +250,17 @@ export interface FileRouteTypes {
     | '/auth/registration'
     | '/auth/verification'
     | '/orders/$orderId'
+    | '/raw-materials/$materialId'
+    | '/stock/$stockItemId'
+    | '/stock/labels'
+    | '/stock/scan'
+    | '/stock/verification'
     | '/orders/'
+    | '/products/'
+    | '/raw-materials/'
+    | '/stock/'
+    | '/stock/stocktake/$sessionId'
+    | '/stock/stocktake/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -176,7 +276,17 @@ export interface FileRouteTypes {
     | '/auth/registration'
     | '/auth/verification'
     | '/orders/$orderId'
+    | '/raw-materials/$materialId'
+    | '/stock/$stockItemId'
+    | '/stock/labels'
+    | '/stock/scan'
+    | '/stock/verification'
     | '/orders'
+    | '/products'
+    | '/raw-materials'
+    | '/stock'
+    | '/stock/stocktake/$sessionId'
+    | '/stock/stocktake'
   id:
     | '__root__'
     | '/'
@@ -192,7 +302,17 @@ export interface FileRouteTypes {
     | '/auth/registration'
     | '/auth/verification'
     | '/orders/$orderId'
+    | '/raw-materials/$materialId'
+    | '/stock/$stockItemId'
+    | '/stock/labels'
+    | '/stock/scan'
+    | '/stock/verification'
     | '/orders/'
+    | '/products/'
+    | '/raw-materials/'
+    | '/stock/'
+    | '/stock/stocktake/$sessionId'
+    | '/stock/stocktake/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -209,7 +329,17 @@ export interface RootRouteChildren {
   AuthRegistrationRoute: typeof AuthRegistrationRoute
   AuthVerificationRoute: typeof AuthVerificationRoute
   OrdersOrderIdRoute: typeof OrdersOrderIdRoute
+  RawMaterialsMaterialIdRoute: typeof RawMaterialsMaterialIdRoute
+  StockStockItemIdRoute: typeof StockStockItemIdRoute
+  StockLabelsRoute: typeof StockLabelsRoute
+  StockScanRoute: typeof StockScanRoute
+  StockVerificationRoute: typeof StockVerificationRoute
   OrdersIndexRoute: typeof OrdersIndexRoute
+  ProductsIndexRoute: typeof ProductsIndexRoute
+  RawMaterialsIndexRoute: typeof RawMaterialsIndexRoute
+  StockIndexRoute: typeof StockIndexRoute
+  StockStocktakeSessionIdRoute: typeof StockStocktakeSessionIdRoute
+  StockStocktakeIndexRoute: typeof StockStocktakeIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -263,11 +393,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/stock/': {
+      id: '/stock/'
+      path: '/stock'
+      fullPath: '/stock/'
+      preLoaderRoute: typeof StockIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/raw-materials/': {
+      id: '/raw-materials/'
+      path: '/raw-materials'
+      fullPath: '/raw-materials/'
+      preLoaderRoute: typeof RawMaterialsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/products/': {
+      id: '/products/'
+      path: '/products'
+      fullPath: '/products/'
+      preLoaderRoute: typeof ProductsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/orders/': {
       id: '/orders/'
       path: '/orders'
       fullPath: '/orders/'
       preLoaderRoute: typeof OrdersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stock/verification': {
+      id: '/stock/verification'
+      path: '/stock/verification'
+      fullPath: '/stock/verification'
+      preLoaderRoute: typeof StockVerificationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stock/scan': {
+      id: '/stock/scan'
+      path: '/stock/scan'
+      fullPath: '/stock/scan'
+      preLoaderRoute: typeof StockScanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stock/labels': {
+      id: '/stock/labels'
+      path: '/stock/labels'
+      fullPath: '/stock/labels'
+      preLoaderRoute: typeof StockLabelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stock/$stockItemId': {
+      id: '/stock/$stockItemId'
+      path: '/stock/$stockItemId'
+      fullPath: '/stock/$stockItemId'
+      preLoaderRoute: typeof StockStockItemIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/raw-materials/$materialId': {
+      id: '/raw-materials/$materialId'
+      path: '/raw-materials/$materialId'
+      fullPath: '/raw-materials/$materialId'
+      preLoaderRoute: typeof RawMaterialsMaterialIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/orders/$orderId': {
@@ -312,6 +498,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthErrorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/stock/stocktake/': {
+      id: '/stock/stocktake/'
+      path: '/stock/stocktake'
+      fullPath: '/stock/stocktake/'
+      preLoaderRoute: typeof StockStocktakeIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stock/stocktake/$sessionId': {
+      id: '/stock/stocktake/$sessionId'
+      path: '/stock/stocktake/$sessionId'
+      fullPath: '/stock/stocktake/$sessionId'
+      preLoaderRoute: typeof StockStocktakeSessionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -329,7 +529,17 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRegistrationRoute: AuthRegistrationRoute,
   AuthVerificationRoute: AuthVerificationRoute,
   OrdersOrderIdRoute: OrdersOrderIdRoute,
+  RawMaterialsMaterialIdRoute: RawMaterialsMaterialIdRoute,
+  StockStockItemIdRoute: StockStockItemIdRoute,
+  StockLabelsRoute: StockLabelsRoute,
+  StockScanRoute: StockScanRoute,
+  StockVerificationRoute: StockVerificationRoute,
   OrdersIndexRoute: OrdersIndexRoute,
+  ProductsIndexRoute: ProductsIndexRoute,
+  RawMaterialsIndexRoute: RawMaterialsIndexRoute,
+  StockIndexRoute: StockIndexRoute,
+  StockStocktakeSessionIdRoute: StockStocktakeSessionIdRoute,
+  StockStocktakeIndexRoute: StockStocktakeIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

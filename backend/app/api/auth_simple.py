@@ -17,7 +17,7 @@ class UserCreate(BaseModel):
     first_name: str
     last_name: str
     mobile: str = ""
-    role: str = "inspector"
+    role: str = "warehouse"
 
 class UserLogin(BaseModel):
     email: EmailStr

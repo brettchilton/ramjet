@@ -102,6 +102,15 @@ class RejectRequest(BaseModel):
     reason: str
 
 
+class VerificationSummary(BaseModel):
+    line_item_id: UUID
+    product_code: str
+    colour: str
+    ordered_quantity: int
+    system_stock: int
+    verification_status: str
+
+
 class ApproveResponse(BaseModel):
     order_id: UUID
     status: str
@@ -109,6 +118,8 @@ class ApproveResponse(BaseModel):
     office_order_generated: bool
     works_orders_generated: int
     email_notification_queued: bool = False
+    verification_status: Optional[str] = None  # pending | all_confirmed | none
+    verifications: list[VerificationSummary] = []
 
 
 class RejectResponse(BaseModel):

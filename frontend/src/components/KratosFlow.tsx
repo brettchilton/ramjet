@@ -67,7 +67,7 @@ export function KratosFlow({ flow, onSubmit, loading = false }: KratosFlowProps)
       }
       if (attributes?.name === 'traits.role' && flow.request_url?.includes('/registration')) {
         if (!formData['traits.role']) {
-          initial['traits.role'] = 'inspector';
+          initial['traits.role'] = 'warehouse';
         }
       }
     }

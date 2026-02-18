@@ -28,7 +28,7 @@ class KratosWebhookRequest(BaseModel):
     first_name: str
     last_name: str
     mobile: Optional[str] = None
-    role: Optional[str] = "inspector"
+    role: Optional[str] = "warehouse"
 
 class SessionResponse(BaseModel):
     session_token: Optional[str] = None
@@ -146,7 +146,7 @@ async def get_session(request: Request, db: Session = Depends(get_db)):
                     last_name=traits.get("last_name", ""),
                     mobile=traits.get("mobile"),
                     kratos_identity_id=kratos_id,
-                    role=traits.get("role", "inspector"),
+                    role=traits.get("role", "warehouse"),
                     is_active=True
                 )
                 db.add(user)

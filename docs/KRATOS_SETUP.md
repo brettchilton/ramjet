@@ -129,7 +129,7 @@ Defines user traits:
 - first_name (required)
 - last_name (required)
 - mobile (optional)
-- role (enum: inspector, admin, viewer)
+- role (enum: warehouse, admin)
 
 ### kratos/webhooks.jsonnet
 

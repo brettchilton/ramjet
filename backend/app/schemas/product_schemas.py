@@ -13,6 +13,7 @@ class ProductListItem(BaseModel):
     product_description: str
     customer_name: Optional[str] = None
     is_active: bool = True
+    is_stockable: bool = True
 
 
 # ── Nested detail models ────────────────────────────────────────────────
@@ -73,6 +74,7 @@ class ProductFullResponse(BaseModel):
     product_description: str
     customer_name: Optional[str] = None
     is_active: bool = True
+    is_stockable: bool = True
     manufacturing: Optional[ManufacturingSpecResponse] = None
     materials: list[MaterialSpecResponse] = []
     packaging: Optional[PackagingSpecResponse] = None
@@ -108,6 +110,22 @@ class CalculationResponse(BaseModel):
     material_requirements: MaterialRequirements
     packaging_requirements: PackagingRequirements
     estimated_cost: float
+
+
+# ── CRUD request models ────────────────────────────────────────────────
+
+class ProductCreate(BaseModel):
+    product_code: str
+    product_description: str
+    customer_name: Optional[str] = None
+    is_stockable: bool = True
+
+
+class ProductUpdate(BaseModel):
+    product_description: Optional[str] = None
+    customer_name: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_stockable: Optional[bool] = None
 
 
 # ── Fuzzy match response ────────────────────────────────────────────────

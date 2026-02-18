@@ -294,11 +294,25 @@ def _write_kv_pair_row(ws, row: int, label1: str, val1, label2: str, val2) -> in
     return row
 
 
-def generate_works_order(db: Session, order: Order, line_item: OrderLineItem) -> bytes:
-    """Build a Works Order .xlsx for one line item and return the bytes."""
+def generate_works_order(
+    db: Session,
+    order: Order,
+    line_item: OrderLineItem,
+    adjusted_quantity: Optional[int] = None,
+    verified_stock: Optional[int] = None,
+) -> bytes:
+    """
+    Build a Works Order .xlsx for one line item and return the bytes.
+
+    If adjusted_quantity is provided, uses it instead of line_item.quantity
+    for the production quantity. Adds a stock note if verified_stock is given.
+    """
     wb = Workbook()
     ws = wb.active
     ws.title = "Works Order"
+
+    # The quantity to display on the WO
+    production_qty = adjusted_quantity if adjusted_quantity is not None else line_item.quantity
 
     # Column widths (A-F)
     col_widths = [20, 20, 20, 20, 20, 20]
@@ -334,7 +348,14 @@ def generate_works_order(db: Session, order: Order, line_item: OrderLineItem) ->
     row = _write_kv_pair_row(ws, row, "Customer:", order.customer_name or "", "PO Date:", order.po_date)
     row = _write_kv_pair_row(ws, row, "Product Code:", line_item.product_code or line_item.matched_product_code or "", "Delivery Date:", order.delivery_date)
     row = _write_kv_pair_row(ws, row, "Description:", line_item.product_description or "", "Colour:", line_item.colour or "")
-    row = _write_kv_pair_row(ws, row, "Quantity:", line_item.quantity, "Line Total:", _to_float(line_item.line_total))
+    row = _write_kv_pair_row(ws, row, "Ordered Qty:", line_item.quantity, "Produce Qty:", production_qty)
+
+    # Stock note if verified stock was deducted
+    if verified_stock is not None and verified_stock > 0:
+        stock_note = f"Stock on hand: {verified_stock} — Produce: {production_qty}"
+        row = _write_kv_row(ws, row, "Stock Note:", stock_note, merge_to=6)
+
+    row = _write_kv_pair_row(ws, row, "Line Total:", _to_float(line_item.line_total), "", "")
     row += 1
 
     # Fetch product specs if matched
@@ -350,7 +371,7 @@ def generate_works_order(db: Session, order: Order, line_item: OrderLineItem) ->
             specs = specs[0] if specs else None
 
         if colour:
-            mat_reqs = calculate_material_requirements(db, product_code, colour, line_item.quantity)
+            mat_reqs = calculate_material_requirements(db, product_code, colour, production_qty)
 
     # ── Section 2: Manufacturing Specifications ───────────────────────
     row = _write_section_header(ws, row, "Manufacturing Specifications")

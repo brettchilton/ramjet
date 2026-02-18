@@ -15,6 +15,29 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
+const adminNav = [
+  { label: 'Orders', path: '/orders' },
+  { label: 'Scan', path: '/stock/scan' },
+  { label: 'Labels', path: '/stock/labels' },
+  { label: 'Stock', path: '/stock' },
+  { label: 'Tasks', path: '/stock/verification' },
+  { label: 'Products', path: '/products' },
+  { label: 'Raw Materials', path: '/raw-materials' },
+  { label: 'Reports', path: '/reports' },
+];
+
+const warehouseNav = [
+  { label: 'Scan', path: '/stock/scan' },
+  { label: 'Labels', path: '/stock/labels' },
+  { label: 'Stock', path: '/stock' },
+  { label: 'Tasks', path: '/stock/verification' },
+];
+
+function getNavItems(role?: string) {
+  if (role === 'warehouse') return warehouseNav;
+  return adminNav;
+}
+
 export function Header() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,19 +66,22 @@ export function Header() {
 
         {/* Navigation */}
         <nav className="ml-8 flex items-center gap-1">
-          <button
-            onClick={() => navigate({ to: '/orders' })}
-            className={`relative px-3 py-1.5 text-4xl font-semibold uppercase tracking-wide transition-colors rounded-md ${
-              location.pathname.startsWith('/orders')
-                ? 'text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Orders
-            {location.pathname.startsWith('/orders') && (
-              <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-foreground rounded-full" />
-            )}
-          </button>
+          {getNavItems(user?.role).map((item) => (
+            <button
+              key={item.path}
+              onClick={() => navigate({ to: item.path })}
+              className={`relative px-3 py-1.5 text-sm font-semibold uppercase tracking-wide transition-colors rounded-md ${
+                location.pathname.startsWith(item.path)
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {item.label}
+              {location.pathname.startsWith(item.path) && (
+                <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-foreground rounded-full" />
+              )}
+            </button>
+          ))}
         </nav>
 
         {/* Right side - User, Theme, Logout */}

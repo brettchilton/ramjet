@@ -56,7 +56,7 @@ CREATE TABLE users (
     mobile VARCHAR(20),
     password_hash VARCHAR(255),
     kratos_identity_id VARCHAR(255) UNIQUE,
-    role VARCHAR(50) DEFAULT 'inspector',
+    role VARCHAR(50) DEFAULT 'warehouse',
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE

@@ -56,7 +56,7 @@ Body: {
   "first_name": "John",
   "last_name": "Doe",
   "mobile": "0400000000",  # optional
-  "role": "inspector"      # default: inspector
+  "role": "warehouse"      # default: warehouse
 }
 Response: {
   "access_token": "eyJ...",
@@ -66,7 +66,7 @@ Response: {
     "email": "user@example.com",
     "first_name": "John",
     "last_name": "Doe",
-    "role": "inspector"
+    "role": "warehouse"
   }
 }
 
@@ -93,7 +93,7 @@ Response: {
   "first_name": "John",
   "last_name": "Doe",
   "mobile": "0400000000",
-  "role": "inspector",
+  "role": "warehouse",
   "is_active": true
 }
 
@@ -180,8 +180,8 @@ User identities are defined in `kratos/identity.schema.json`:
         "mobile": { "type": "string" },
         "role": {
           "type": "string",
-          "default": "inspector",
-          "enum": ["inspector", "admin", "viewer"]
+          "default": "warehouse",
+          "enum": ["warehouse", "admin"]
         }
       }
     }

@@ -27,6 +27,7 @@ from app.schemas.order_schemas import (
     ProcessSingleResponse,
     RejectRequest,
     RejectResponse,
+    VerificationSummary,
 )
 from app.services.extraction_service import (
     process_unprocessed_emails,
@@ -34,6 +35,10 @@ from app.services.extraction_service import (
 )
 from app.services.form_generation_service import generate_all_forms
 from app.services.gmail_sender_service import gmail_sender
+from app.services.stock_verification_service import (
+    check_and_generate_works_orders,
+    get_verification_status_for_order,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -166,22 +171,52 @@ def update_line_item(
 
 @router.post("/{order_id}/approve", response_model=ApproveResponse)
 async def approve_order(order_id: UUID, db: Session = Depends(get_db)):
-    """Approve an order and generate all forms."""
+    """
+    Approve an order. If stock verifications are pending, works orders
+    are NOT generated yet — they generate only when both approval and
+    verification are complete.
+    """
     order = _get_order_or_404(db, order_id)
     _require_pending(order)
 
     if not order.line_items:
         raise HTTPException(status_code=400, detail="Order has no line items")
 
-    # Generate forms (CPU-bound, run in executor)
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, generate_all_forms, db, order)
-
-    # Update status
+    # Set approved status
     order.status = "approved"
     order.approved_at = datetime.now(timezone.utc)
+    db.flush()
 
-    # Capture notification data before commit (avoids expire_on_commit issues)
+    # Check verification status
+    v_status = get_verification_status_for_order(order_id, db)
+
+    verification_summaries = []
+    for v in v_status["verifications"]:
+        line_item = db.query(OrderLineItem).filter(OrderLineItem.id == v.order_line_item_id).first()
+        verification_summaries.append(
+            VerificationSummary(
+                line_item_id=v.order_line_item_id,
+                product_code=v.product_code,
+                colour=v.colour,
+                ordered_quantity=line_item.quantity if line_item else 0,
+                system_stock=v.system_stock_quantity,
+                verification_status=v.status,
+            )
+        )
+
+    works_order_triggered = False
+    if v_status["total"] == 0:
+        # No verifications needed — generate forms immediately (old behaviour)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, generate_all_forms, db, order)
+        order.status = "works_order_generated"
+        works_order_triggered = True
+    elif v_status["all_confirmed"]:
+        # All verifications already confirmed — generate with adjusted quantities
+        works_order_triggered = check_and_generate_works_orders(order_id, db)
+    # else: verifications pending — wait for warehouse to confirm
+
+    # Capture notification data before commit
     notification_data = {
         "order_id": str(order.id),
         "customer_name": order.customer_name or "Unknown",
@@ -200,7 +235,6 @@ async def approve_order(order_id: UUID, db: Session = Depends(get_db)):
         ],
         "attachments": [],
     }
-    # Collect file bytes while session is still active
     if order.office_order_file:
         notification_data["attachments"].append({
             "filename": f"Office_Order_{order.po_number or order.id}.xlsx",
@@ -223,13 +257,24 @@ async def approve_order(order_id: UUID, db: Session = Depends(get_db)):
     except Exception as e:
         logger.warning(f"Failed to queue approval notification: {e}")
 
+    # Build response message
+    if v_status["total"] == 0 or works_order_triggered:
+        message = "Order approved and forms generated"
+        v_status_str = "none" if v_status["total"] == 0 else "all_confirmed"
+    else:
+        pending_count = v_status["pending"]
+        message = f"Order approved. Awaiting stock verification for {pending_count} line item{'s' if pending_count != 1 else ''}."
+        v_status_str = "pending"
+
     return ApproveResponse(
         order_id=order.id,
         status=order.status,
-        message="Order approved and forms generated",
+        message=message,
         office_order_generated=order.office_order_file is not None,
         works_orders_generated=len([li for li in order.line_items if li.works_order_file is not None]),
         email_notification_queued=email_notification_queued,
+        verification_status=v_status_str,
+        verifications=verification_summaries,
     )
 
 
