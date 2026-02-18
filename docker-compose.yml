@@ -12,7 +12,7 @@ services:
     ports:
       - '5532:5432' # Host port 5532, Container port 5432
     volumes:
-      - ramjet_pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     networks:
       - app-network
 
@@ -166,7 +166,7 @@ services:
     tty: true
 
 volumes:
-  ramjet_pgdata:
+  pgdata:
 
 networks:
   app-network:

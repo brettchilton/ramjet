@@ -31,8 +31,8 @@ from app.services.gmail_service import gmail_poller
 
 # Initialize FastAPI application
 app = FastAPI(
-    title="Annie Defect Tracking API",
-    description="API for uploading and processing building defect assessments",
+    title="Ramjet API",
+    description="Ramjet API",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -42,7 +42,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5179", "http://localhost:3000", "http://localhost:5173"],  # Frontend URLs
+    allow_origins=["http://localhost:5280", "http://localhost:3000", "http://localhost:5173"],  # Frontend URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

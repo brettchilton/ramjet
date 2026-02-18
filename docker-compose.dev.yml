@@ -2,8 +2,6 @@
 # This skips Kratos since we use Simple Auth locally
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
-version: '3.8'
-
 services:
   # Stop Kratos services in development
   kratos:
