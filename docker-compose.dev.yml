@@ -25,4 +25,4 @@ services:
   frontend:
     environment:
       VITE_USE_SIMPLE_AUTH: "true"
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8006}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8100}
